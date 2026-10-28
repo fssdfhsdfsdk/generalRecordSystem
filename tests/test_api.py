@@ -388,6 +388,14 @@ class ApiTestCase(unittest.TestCase):
         )
         self.assertEqual(status, 400)
 
+    def test_port_is_exclusive(self):
+        with self.assertRaises(OSError):
+            server.create_server(
+                "127.0.0.1",
+                self.port,
+                self.temp_dir / "second.db",
+            )
+
     def test_static_files_and_path_traversal(self):
         status, body = self.request("GET", "/")
         self.assertEqual(status, 200)

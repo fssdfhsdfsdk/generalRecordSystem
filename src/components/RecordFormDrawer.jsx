@@ -127,6 +127,7 @@ export default function RecordFormDrawer({
           <Form.Item
             name="title"
             label="标题"
+            extra="最多 255 个字符；列表与详情中超出预览长度的部分会省略，悬浮可查看完整标题。"
             rules={[
               { required: true, message: '请填写标题' },
               { max: 255, message: '标题不能超过 255 个字符' },
@@ -135,6 +136,7 @@ export default function RecordFormDrawer({
             <Input
               size="large"
               maxLength={255}
+              showCount
               placeholder="用一句话说明这条记录"
               className="title-input"
             />

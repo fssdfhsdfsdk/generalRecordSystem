@@ -28,6 +28,7 @@ import { formatDate, formatShortDate } from '../utils'
 import PageHeader from '../components/PageHeader'
 import EmptyState from '../components/EmptyState'
 import TagPill from '../components/TagPill'
+import TitleText from '../components/TitleText'
 import RecordViewDrawer from '../components/RecordViewDrawer'
 import RecordFormDrawer from '../components/RecordFormDrawer'
 import TypeIcon from '../components/TypeIcon'
@@ -134,9 +135,10 @@ export default function RecordsPage({ typeId }) {
         <button
           type="button"
           className="table-title-button"
+          aria-label={`查看记录：${record.title}`}
           onClick={() => setViewId(record.id)}
         >
-          {record.title}
+          <TitleText text={record.title} maxChars={48} />
         </button>
       ),
     },

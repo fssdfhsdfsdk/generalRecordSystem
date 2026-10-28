@@ -15,7 +15,9 @@ from __future__ import annotations
 import argparse
 import json
 import mimetypes
+import os
 import re
+import socket
 import sqlite3
 import sys
 import threading
@@ -37,7 +39,7 @@ MAX_NAME = 100
 MAX_FIELD_VALUE = 200_000
 MAX_FIELDS = 30
 MAX_TAGS = 30
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 
 DEFAULT_TYPES = [
     ("Q&A", ["问题", "答案"]),
@@ -956,10 +958,26 @@ def make_handler(db_path: Path, debug: bool = False):
     return BoundHandler
 
 
-def create_server(host: str, port: int, db_path: Path, debug: bool = False) -> ThreadingHTTPServer:
+class AppHTTPServer(ThreadingHTTPServer):
+    """HTTP server that refuses to share a port with another instance.
+
+    On Windows, SO_REUSEADDR can let a second process bind the same port and
+    silently serve a different database. SO_EXCLUSIVEADDRUSE makes the second
+    start fail loudly instead.
+    """
+
+    daemon_threads = True
+    allow_reuse_address = os.name != "nt"
+
+    def server_bind(self):
+        if os.name == "nt":
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
+def create_server(host: str, port: int, db_path: Path, debug: bool = False) -> AppHTTPServer:
     init_db(Path(db_path))
-    server = ThreadingHTTPServer((host, port), make_handler(Path(db_path), debug))
-    server.daemon_threads = True
+    server = AppHTTPServer((host, port), make_handler(Path(db_path), debug))
     return server
 
 

@@ -1,6 +1,6 @@
 # 开发缺陷记录（bug-tracks.md）
 
-本文档记录“拾录 · 通用记录系统”v1.0 开发过程中实际遇到并修复的缺陷。格式遵循顾客要求：描述、背景与上下文、分析过程、根因、解决方法、时间。
+本文档记录“拾录 · 通用记录系统”v1.0 与 v1.1 开发过程中实际遇到并修复的缺陷。格式遵循顾客要求：描述、背景与上下文、分析过程、根因、解决方法、时间。
 
 ---
 
@@ -428,6 +428,85 @@ if defined GRS_DB set DB_FLAG=--db "%GRS_DB%"
 
 ---
 
+## BUG-012：移动端详情页加入复制按钮后，标题被挤成竖排、操作区拥挤
+
+**描述：**  
+v1.1 在记录详情抽屉顶部新增「复制全文」按钮后，390px 宽度下标题区域被压缩，“记录详情 / 问题根因”断成多行并接近竖排，复制、编辑、删除三个按钮挤在右侧，视觉上非常局促。
+
+**背景与上下文：**  
+Drawer 的 `extra` 原本已有“编辑”“删除”两个带文字按钮；新增复制按钮后，三个按钮都带文字，加上 Drawer 标题和 kicker（“记录详情”），在移动端宽度下竞争同一行。桌面端 780px 宽度正常。
+
+**分析过程：**
+
+1. 用 390×844 截图复现，确认 header 内容没有横向溢出，但标题被压到极窄；
+2. 检查 DOM，三个按钮中复制按钮已隐藏文字，编辑/删除仍保留文字；
+3. 分析 flex 分配：`.ant-drawer-header-title` 可收缩，`.ant-drawer-extra` 固定内容宽度，按钮文字进一步压缩标题；
+4. 设计移动端规则：隐藏 kicker、按钮图标化、收紧间距、标题单行省略；
+5. 重新截图并用 E2E 断言 `header.scrollWidth <= clientWidth`，确认没有溢出。
+
+**根因：**  
+新增操作按钮后，移动端仍沿用桌面端的“带文字按钮 + 完整标题块”布局；没有为窄屏重新分配标题与操作区的空间。
+
+**解决方法：**
+
+```css
+@media (max-width: 680px) {
+  .record-view-drawer .drawer-heading-kicker { display: none; }
+  .record-view-drawer .drawer-heading-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .record-view-drawer .ant-drawer-extra .ant-btn > span:not(.ant-btn-icon) {
+    display: none;
+  }
+}
+```
+
+同时为复制、编辑、删除按钮补充 `aria-label`，保证图标化后仍有可访问名称。
+
+**时间：** 2026-10-29 01:57–01:58 +08:00
+
+---
+
+## BUG-013：Windows 下两个实例可绑定同一端口，请求命中旧数据库
+
+**描述：**  
+验证 v1.1 生产页面时，启动在 8767 的服务使用 `data/dev.db`；但排查 8765 时发现同一端口存在两个监听进程：一个使用 `data/records.db`，另一个使用 `data/dev.db`。请求实际命中了旧实例，导致看到的类型与记录和预期不符。
+
+**背景与上下文：**  
+开发环境里已有一个用户启动的 `python server.py --port 8765 --open`（使用 `records.db`）。验证过程中又启动了 `python server.py --port 8765 --db data/dev.db`，启动日志显示成功，没有报端口占用。
+
+**分析过程：**
+
+1. `Get-NetTCPConnection -LocalPort 8765 -State Listen` 返回两个不同 PID；
+2. 读取两个进程的命令行，确认一个使用 `records.db`，另一个使用 `dev.db`；
+3. 访问 API 看到的是 `records.db` 的数据，而新进程认为自己在服务 `dev.db`；
+4. 检查 Python 的 `ThreadingHTTPServer` 默认 `allow_reuse_address = 1`；Windows 的 `SO_REUSEADDR` 语义允许两个 socket 绑定同一地址；
+5. 在 Windows 上使用 `SO_EXCLUSIVEADDRUSE`，并关闭 `allow_reuse_address`，再次启动第二实例，得到 `WinError 10048`。
+
+**根因：**  
+Windows 对 `SO_REUSEADDR` 的处理与 Unix 不同，允许重复绑定同一端口；默认 HTTP server 没有设置独占标志，导致第二个实例“启动成功”但实际请求被旧实例接收，两个数据库可能被混淆。
+
+**解决方法：**
+
+```python
+class AppHTTPServer(ThreadingHTTPServer):
+    daemon_threads = True
+    allow_reuse_address = os.name != "nt"
+
+    def server_bind(self):
+        if os.name == "nt":
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+```
+
+并新增后端测试 `test_port_is_exclusive`，断言同端口第二个 `create_server()` 抛出 `OSError`。启动脚本的端口冲突提示也因此变得可靠。
+
+**时间：** 2026-10-29 01:59–02:01 +08:00
+
+---
+
 ## 附：验证方式
 
 | 缺陷 | 验证 |
@@ -440,8 +519,10 @@ if defined GRS_DB set DB_FLAG=--db "%GRS_DB%"
 | BUG-006 | Popconfirm DOM 文本与 E2E 删除流程 |
 | BUG-007 | 390px 截图 + `.table-actions` 存在性断言 |
 | BUG-008 | 路由空标签场景代码走查与修复 |
-| BUG-009 | 代码审查 + 16 个后端测试 |
+| BUG-009 | 代码审查 + 后端测试 |
 | BUG-010 | DOM 结构检查 + 首页点击/键盘操作 |
 | BUG-011 | 端口 8771 独立 DB 启动；日志与 `/api/health` 验证 |
+| BUG-012 | 390px 详情截图 + header 无横向溢出断言 |
+| BUG-013 | 同端口第二实例启动失败；`test_port_is_exclusive` 通过 |
 
-上述缺陷修复后，最终回归结果：**16 个后端测试通过，7 组浏览器 E2E 通过，生产构建成功，CSP 下无 console error**。
+上述缺陷修复后，最终回归结果：**17 个后端测试通过，v1.1 浏览器 E2E 的 23 项断言通过，生产构建成功，CSP 下无 console error**。

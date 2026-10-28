@@ -6,17 +6,22 @@ import {
   Popconfirm,
   Skeleton,
   Space,
+  Tooltip,
 } from 'antd'
 import {
+  CopyOutlined,
   DeleteOutlined,
   EditOutlined,
   LinkOutlined,
   ReloadOutlined,
 } from '@ant-design/icons'
 import { api } from '../api'
+import { copyText } from '../clipboard'
+import { buildRecordMarkdown } from '../recordText'
 import { formatDate } from '../utils'
 import Markdown from './Markdown'
 import TagPill from './TagPill'
+import TitleText from './TitleText'
 import TypeIcon from './TypeIcon'
 import EmptyState from './EmptyState'
 
@@ -65,6 +70,29 @@ export default function RecordViewDrawer({
     }
   }
 
+  const handleCopyAll = async () => {
+    if (!record) return
+    try {
+      await copyText(buildRecordMarkdown(record))
+      message.success('完整记录已复制（Markdown）')
+    } catch {
+      message.error('复制失败，请检查浏览器的剪贴板权限')
+    }
+  }
+
+  const handleCopyField = async (field) => {
+    if (!String(field.value || '').trim()) {
+      message.info('该字段为空，没有可复制的内容')
+      return
+    }
+    try {
+      await copyText(field.value)
+      message.success(`已复制「${field.name}」`)
+    } catch {
+      message.error('复制失败，请检查浏览器的剪贴板权限')
+    }
+  }
+
   return (
     <Drawer
       open={open}
@@ -80,8 +108,20 @@ export default function RecordViewDrawer({
       extra={
         record ? (
           <Space size={8}>
+            <Button
+              className="copy-all-button"
+              icon={<CopyOutlined />}
+              onClick={handleCopyAll}
+              aria-label="复制完整记录"
+            >
+              <span className="copy-all-label">复制全文</span>
+            </Button>
             {onEdit ? (
-              <Button icon={<EditOutlined />} onClick={() => onEdit(record)}>
+              <Button
+                icon={<EditOutlined />}
+                onClick={() => onEdit(record)}
+                aria-label="编辑记录"
+              >
                 编辑
               </Button>
             ) : null}
@@ -93,7 +133,12 @@ export default function RecordViewDrawer({
               okButtonProps={{ danger: true }}
               onConfirm={handleDelete}
             >
-              <Button danger type="text" icon={<DeleteOutlined />}>
+              <Button
+                danger
+                type="text"
+                icon={<DeleteOutlined />}
+                aria-label="删除记录"
+              >
                 删除
               </Button>
             </Popconfirm>
@@ -121,7 +166,12 @@ export default function RecordViewDrawer({
                 </>
               ) : null}
             </div>
-            <h2 className="record-view-title">{record.title}</h2>
+            <TitleText
+              as="h2"
+              className="record-view-title"
+              text={record.title}
+              maxChars={100}
+            />
             <div className="record-tag-row">
               {record.tags.length ? (
                 record.tags.map((tag) => <TagPill key={tag} name={tag} />)
@@ -134,9 +184,26 @@ export default function RecordViewDrawer({
           <div className="record-field-list">
             {record.fields.map((field, index) => (
               <section className="record-field" key={field.field_id}>
-                <div className="record-field-name">
-                  <span className="field-index">{String(index + 1).padStart(2, '0')}</span>
-                  {field.name}
+                <div className="record-field-head">
+                  <div className="record-field-name">
+                    <span className="field-index">
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
+                    {field.name}
+                  </div>
+                  <Tooltip title={field.value?.trim() ? '复制字段内容' : '字段为空'}>
+                    <span className="record-field-copy-wrap">
+                      <Button
+                        type="text"
+                        size="small"
+                        className="record-field-copy"
+                        icon={<CopyOutlined />}
+                        disabled={!String(field.value || '').trim()}
+                        onClick={() => handleCopyField(field)}
+                        aria-label={`复制字段「${field.name}」`}
+                      />
+                    </span>
+                  </Tooltip>
                 </div>
                 <Markdown value={field.value} />
               </section>

@@ -14,6 +14,7 @@ import { formatShortDate } from '../utils'
 import EmptyState from '../components/EmptyState'
 import RecordViewDrawer from '../components/RecordViewDrawer'
 import TagPill from '../components/TagPill'
+import TitleText from '../components/TitleText'
 import TypeIcon, { typeVisual } from '../components/TypeIcon'
 
 export default function HomePage() {
@@ -206,6 +207,7 @@ export default function HomePage() {
                 key={record.id}
                 role="button"
                 tabIndex={0}
+                aria-label={`打开记录：${record.title}`}
                 onClick={() => setViewId(record.id)}
                 onKeyDown={(event) => {
                   if (event.target !== event.currentTarget) return
@@ -217,7 +219,9 @@ export default function HomePage() {
               >
                 <TypeIcon name={record.type_name} size="sm" />
                 <span className="recent-main">
-                  <span className="recent-title">{record.title}</span>
+                  <span className="recent-title">
+                    <TitleText text={record.title} maxChars={48} />
+                  </span>
                   <span className="recent-meta">
                     {record.type_name} · {formatShortDate(record.updated_at)}
                   </span>

@@ -1,7 +1,7 @@
 {
   "name": "general-record-system",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "A general, metadata-driven record system with types, custom fields and tags.",
   "scripts": {

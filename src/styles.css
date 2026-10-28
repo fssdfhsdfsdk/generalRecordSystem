@@ -438,6 +438,30 @@ select {
   font-size: 12.5px;
 }
 
+.title-text {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-title-button .title-text,
+.recent-title .title-text {
+  display: block;
+}
+
+.copy-all-button {
+  border-color: #dfe3ff !important;
+  background: #f7f8ff !important;
+  color: #4338ca !important;
+}
+
+.copy-all-button:hover {
+  border-color: #a5b4fc !important;
+  background: #eef2ff !important;
+}
+
 .result-count {
   color: var(--muted);
   font-size: 12.5px;
@@ -1408,6 +1432,39 @@ button.tag-pill {
   color: var(--ink-soft);
   font-size: 12.5px;
   font-weight: 650;
+}
+
+.record-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 13px;
+}
+
+.record-field-head .record-field-name {
+  margin-bottom: 0;
+}
+
+.record-field-copy-wrap {
+  display: inline-flex;
+  flex: none;
+}
+
+.record-field-copy {
+  color: var(--faint);
+  opacity: 0.7;
+  transition: opacity 0.16s ease, color 0.16s ease, background 0.16s ease;
+}
+
+.record-field:hover .record-field-copy:not(:disabled) {
+  background: #eef2ff;
+  color: var(--primary);
+  opacity: 1;
+}
+
+.record-field-copy:disabled {
+  opacity: 0.35;
 }
 
 .drawer-footer {
@@ -2695,6 +2752,48 @@ button.tag-pill {
 
   .record-view-title {
     font-size: 23px;
+  }
+
+  .copy-all-label {
+    display: none;
+  }
+
+  .copy-all-button {
+    padding-inline: 9px !important;
+  }
+
+  .record-view-drawer .ant-drawer-header-title {
+    min-width: 0;
+  }
+
+  .record-view-drawer .drawer-heading {
+    min-width: 0;
+  }
+
+  .record-view-drawer .drawer-heading-kicker {
+    display: none;
+  }
+
+  .record-view-drawer .drawer-heading-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .record-view-drawer .ant-drawer-extra {
+    flex: none;
+  }
+
+  .record-view-drawer .ant-drawer-extra .ant-space {
+    gap: 4px !important;
+  }
+
+  .record-view-drawer .ant-drawer-extra .ant-btn > span:not(.ant-btn-icon) {
+    display: none;
+  }
+
+  .record-view-drawer .ant-drawer-extra .ant-btn {
+    padding-inline: 8px;
   }
 
   .records-page .table-card .ant-table {
