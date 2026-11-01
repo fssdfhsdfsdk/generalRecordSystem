@@ -15,15 +15,15 @@ import {
   LinkOutlined,
   ReloadOutlined,
 } from '@ant-design/icons'
-import { api } from '../api'
-import { copyText } from '../clipboard'
+import { api } from '../../../api'
+import { copyText } from '../../../clipboard'
 import { buildRecordMarkdown } from '../recordText'
-import { formatDate } from '../utils'
-import Markdown from './Markdown'
-import TagPill from './TagPill'
-import TitleText from './TitleText'
+import { formatDate } from '../../../utils'
+import Markdown from '../../../components/Markdown'
+import TagPill from '../../../components/TagPill'
+import TitleText from '../../../components/TitleText'
 import TypeIcon from './TypeIcon'
-import EmptyState from './EmptyState'
+import EmptyState from '../../../components/EmptyState'
 
 export default function RecordViewDrawer({
   open,

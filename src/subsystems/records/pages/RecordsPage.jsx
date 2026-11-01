@@ -21,14 +21,14 @@ import {
   SearchOutlined,
   SettingOutlined,
 } from '@ant-design/icons'
-import { api } from '../api'
-import { useAppData } from '../App'
-import { navigate } from '../router'
-import { formatDate, formatShortDate } from '../utils'
-import PageHeader from '../components/PageHeader'
-import EmptyState from '../components/EmptyState'
-import TagPill from '../components/TagPill'
-import TitleText from '../components/TitleText'
+import { api } from '../../../api'
+import { useAppData } from '../../../shell/AppDataContext'
+import { navigate } from '../../../router'
+import { formatDate, formatShortDate } from '../../../utils'
+import PageHeader from '../../../components/PageHeader'
+import EmptyState from '../../../components/EmptyState'
+import TagPill from '../../../components/TagPill'
+import TitleText from '../../../components/TitleText'
 import RecordViewDrawer from '../components/RecordViewDrawer'
 import RecordFormDrawer from '../components/RecordFormDrawer'
 import TypeIcon from '../components/TypeIcon'
@@ -224,7 +224,7 @@ export default function RecordsPage({ typeId }) {
           subTitle="它可能已经被删除，或者地址有误。"
           extra={
             <Space>
-              <Button onClick={() => navigate('/')}>回到总览</Button>
+              <Button onClick={() => navigate('/records')}>回到总览</Button>
               <Button type="primary" onClick={() => navigate('/manage')}>
                 前往类型管理
               </Button>

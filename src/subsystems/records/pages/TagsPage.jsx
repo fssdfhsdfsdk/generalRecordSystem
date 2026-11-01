@@ -14,11 +14,11 @@ import {
   SearchOutlined,
   TagsOutlined,
 } from '@ant-design/icons'
-import { api } from '../api'
-import { navigate, tagFilterPath } from '../router'
-import { tagTone } from '../utils'
-import PageHeader from '../components/PageHeader'
-import EmptyState from '../components/EmptyState'
+import { api } from '../../../api'
+import { navigate, tagFilterPath } from '../../../router'
+import { tagTone } from '../../../utils'
+import PageHeader from '../../../components/PageHeader'
+import EmptyState from '../../../components/EmptyState'
 
 export default function TagsPage() {
   const { message } = AntApp.useApp()
@@ -190,7 +190,7 @@ export default function TagsPage() {
               <Button onClick={() => setQuery('')}>清空搜索</Button>
             ) : (
               <Space>
-                <Button type="primary" onClick={() => navigate('/')}>
+                <Button type="primary" onClick={() => navigate('/records')}>
                   去写一条记录
                 </Button>
               </Space>

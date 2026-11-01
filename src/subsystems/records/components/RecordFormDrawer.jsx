@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { App as AntApp, Button, Drawer, Form, Input, Space } from 'antd'
 import { SaveOutlined } from '@ant-design/icons'
-import { api } from '../api'
-import MarkdownEditor from './MarkdownEditor'
-import TagSelect from './TagSelect'
+import { api } from '../../../api'
+import MarkdownEditor from '../../../components/MarkdownEditor'
+import TagSelect from '../../../components/TagSelect'
 
 export default function RecordFormDrawer({
   open,

@@ -3,14 +3,8 @@ setlocal EnableExtensions
 chcp 65001 >nul
 cd /d "%~dp0"
 
-set "PORT=8765"
-if not "%GRS_PORT%"=="" set "PORT=%GRS_PORT%"
-
-set "OPEN_FLAG=--open"
-if /I "%~1"=="--no-open" set "OPEN_FLAG="
-
-set "DB_FLAG="
-if defined GRS_DB set DB_FLAG=--db "%GRS_DB%"
+set "OPEN_FLAG="
+if /I "%~1"=="--no-open" set "OPEN_FLAG=--no-open"
 
 echo ============================================================
 echo   General Record System
@@ -63,17 +57,20 @@ if not exist "dist\index.html" (
   )
 )
 
-echo [INFO] Starting on http://127.0.0.1:%PORT%
+echo [INFO] Starting with config.json
+echo [INFO] Optional env overrides: GRS_HOST, GRS_PORT, GRS_DB, GRS_PLAN_DB, GRS_OPEN_BROWSER
 echo [INFO] Press Ctrl+C to stop the server.
 echo.
 
-%PYTHON_CMD% server.py --port %PORT% %DB_FLAG% %OPEN_FLAG%
+%PYTHON_CMD% server.py %OPEN_FLAG%
 if errorlevel 1 (
   echo.
   echo [ERROR] The server exited unexpectedly.
-  echo         Port %PORT% may already be in use, or the database is locked.
-  echo         Set GRS_PORT to another port if needed, for example:
-  echo             set GRS_PORT=8790 ^&^& start.bat
+  echo         Check config.json, the port, or the database paths.
+  echo         You can override settings without editing config.json, for example:
+  echo             set GRS_PORT=8790
+  echo             set GRS_DB=D:\data\my-records.db
+  echo             set GRS_PLAN_DB=D:\data\my-plans.db
   echo.
   pause
 )

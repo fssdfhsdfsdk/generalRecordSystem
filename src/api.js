@@ -1,4 +1,4 @@
-async function request(path, options = {}) {
+export async function request(path, options = {}) {
   const init = { ...options, headers: { ...(options.headers || {}) } }
   if (init.body !== undefined) {
     init.headers['Content-Type'] = 'application/json'
@@ -30,6 +30,7 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  overview: () => request('/api/overview'),
   stats: () => request('/api/stats'),
 
   listTypes: () => request('/api/types'),

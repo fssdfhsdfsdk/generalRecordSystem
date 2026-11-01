@@ -23,7 +23,10 @@ class ApiTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = Path(tempfile.mkdtemp(prefix="grs-test-"))
         self.db_path = self.temp_dir / "test.db"
-        self.httpd = server.create_server("127.0.0.1", 0, self.db_path)
+        self.plan_db_path = self.temp_dir / "plans.db"
+        self.httpd = server.create_server(
+            "127.0.0.1", 0, self.db_path, plan_db_path=self.plan_db_path
+        )
         self.port = self.httpd.server_address[1]
         self.base = f"http://127.0.0.1:{self.port}"
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)

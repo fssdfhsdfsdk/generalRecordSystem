@@ -1,15 +1,15 @@
-# 通用记录系统（拾录）— 需求与资格基线
+# 拾录 · 记录与计划工作台（Record & Plan Workspace）— 需求与资格基线
 
 | 项目 | 内容 |
 | --- | --- |
-| 产品名称 | 拾录 · 通用记录系统（General Record System） |
-| 文档版本 | v1.1 |
-| 基线日期 | 2026-10-29 |
-| 文档状态 | v1.0 已交付；v1.1 变更已实现并通过增量资格验证 |
+| 产品名称 | 拾录 · 记录与计划工作台（Record & Plan Workspace） |
+| 文档版本 | v1.3 |
+| 基线日期 | 2026-11-02 |
+| 文档状态 | v1.0 / v1.1 / v1.2 已交付；v1.3 已实现并通过增量资格验证 |
 | 需求提出方 | 顾客 |
 | 实现团队 | 开发代理（前端 / 后端 / 测试 / 文档） |
-| 资格验证 | 后端自动化测试、生产构建、浏览器端到端验证、启动脚本验证 |
-| 关联文档 | [README.md](README.md)、[bug-tracks.md](bug-tracks.md) |
+| 资格验证 | 后端自动化测试、生产构建、浏览器端到端验证、启动脚本验证、双库隔离验证、配置文件优先级验证 |
+| 关联文档 | [README.md](README.md)、[bug-tracks.md](bug-tracks.md)、[config.json](config.json) |
 
 ---
 
@@ -419,7 +419,7 @@ v1.0 已满足 IR-01～IR-15 的 Must 要求，IR-16 的质量目标由隔离、
 | O-07 | 无导入/导出/备份 UI | 迁移依赖手工复制 DB | 增加 JSON/Markdown 导出与备份按钮 |
 | O-08 | 无版本历史/审计 | 误删无法恢复 | 增加记录版本或软删除 |
 | O-09 | 标签大小写仅 ASCII 不敏感 | 中文/非 ASCII 大小写语义有限 | 如需 Unicode casefold，应用层统一 |
-| O-10 | 前端包 1.27 MB | 首次加载较慢（本地可接受） | 路由级代码分割 / 按需加载 antd |
+| O-10 | 前端包约 1.52 MB | 首次加载较慢（本地可接受） | 路由级代码分割 / 按需加载 antd |
 | O-11 | 无自动化视觉回归 | UI 回归依赖人工截图 | 引入 Playwright 视觉快照 |
 | O-12 | E2E 脚本未纳入仓库 | 复跑需开发环境脚本 | 将 E2E 作为可选 devDependency 纳入 CI |
 
@@ -499,12 +499,310 @@ IR-17、IR-18 均已满足；复制内容与展示内容分离，完整标题不
 
 ---
 
-## 11. 变更记录
+## 11. v1.2 需求变更（CR-02：计划管理子系统与多子系统工作台）
+
+### 11.1 变更输入
+
+| ID | 变更输入 | 优先级 |
+| --- | --- | --- |
+| IR-19 | 固定主页面包含多个子系统入口（通用记录、计划管理），可点击切换；侧边栏内容随子系统切换，但始终包含「主页面」 | Must |
+| IR-20 | 不同子系统使用分离的目录结构 | Must |
+| IR-21 | 计划包含标题、内容、创建时间、类型、预估/实际耗时、计划时间线、状态、进度、完成度、父计划 | Must |
+| IR-22 | 计划类型：长远 / 中期 / 短期，对应 3 个子页面 | Must |
+| IR-23 | 计划状态：进行中 / 完成 / 放弃 / 超时 / 搁置；按指定规则流转，完成与放弃允许重新打开并留审计 | Must |
+| IR-24 | 计划时间节点、节点依赖/权重/状态；实际时间点描述表（实际起止、描述、证据） | Must |
+| IR-25 | 进度/完成度；进度历史支持增减，字段为时间、描述、变化度；可记录阻塞/困难 | Must |
+| IR-26 | 计划标签采用三表模型 | Must |
+| IR-27 | 计划列表支持多字段搜索与过滤 | Must |
+| IR-28 | 计划标签页，交互类似通用记录标签页 | Must |
+| IR-29 | 计划与通用记录的数据库文件必须隔离 | Must |
+| IR-30 | 保留 v1.0 / v1.1 的通用记录功能、数据与交互 | Must |
+| IR-31 | 计划可挂到一个父计划下（参考模型含 `parent_plan_id`） | Should |
+
+### 11.2 澄清、假设与协议
+
+| ID | 澄清 / 决策 |
+| --- | --- |
+| C-23 | **双库隔离**：记录使用 `data/records.db`，计划使用 `data/plans.db`；两库不共享表、标签、外键或事务。主页面通过 `/api/overview` 分别连接两库汇总。启动参数 `--db` / `--plan-db`，环境变量 `GRS_DB` / `GRS_PLAN_DB`。 |
+| C-24 | **进度与完成度分离**：进度由进度历史的增减按时间顺序累计并限制在 0–100；完成度由未放弃节点按权重汇总，没有节点时等于进度。两者都在列表与详情中展示。 |
+| C-25 | **状态流转**：进行中 → 完成/放弃/超时/搁置；搁置 → 进行中/放弃；超时 → 进行中/完成/放弃；完成/放弃只允许重新打开为进行中。所有变更写入 `plan_status_logs`，放弃/搁置/超时必须填写原因。 |
+| C-26 | **「变更转移」本期不实现**（顾客确认）：需要转移时使用「放弃 + 原因」，不新增第 6 种状态。 |
+| C-27 | **附件只保存链接或文字说明**（顾客确认）：实际时间点与进度记录提供 `evidence` 文本字段，不做文件上传/下载。 |
+| C-28 | **计划标签独立词库**（顾客确认）：使用 `plan_tags`（词库）+ `plan_tag_links`（关系）+ `plans` 三表；不读取也不影响 `records.db` 的标签。 |
+| C-29 | **父子计划只支持一级**（顾客确认）：计划可挂到一个根计划下；父计划本身不能再有父计划；已有子计划的计划不能再挂到别处；删除父计划时子计划变为根计划。 |
+| C-30 | 耗时单位为**小时**，允许两位小数；计划时间线、节点时间、实际时间点均使用本地时间 `YYYY-MM-DD HH:MM:SS`。 |
+| C-31 | **超时以手动状态为主**：计划结束时间已过只作为筛选/提示，不自动改状态；避免后台写审计与时间依赖。 |
+| C-32 | **终态锁定**：完成/放弃的计划不能编辑、增删节点或改进度；必须重新打开。实际时间点允许在终态继续补录，作为历史证据。 |
+| C-33 | **进度重算**：每条进度记录保存 `progress_after`；新增/删除后按 `changed_at, id` 顺序重算，超出 0–100 的部分截断。这样删除中间记录、负向回退后当前值与历史一致。 |
+| C-34 | 计划类型可编辑；修改后计划会出现在对应类型子页面，不产生状态变更。 |
+| C-35 | 计划筛选：标题/内容关键词、状态多选、标签 AND、进度区间、计划时间线覆盖范围、排序；列表一次返回匹配项，前端分页。 |
+| C-36 | 计划标签页支持名称/数量排序、模糊搜索、引用计数、孤立标签清理；清理只作用于 `plans.db`。 |
+| C-37 | 删除计划级联删除节点、实际时间点、进度/状态历史与标签关系；子计划 `parent_plan_id` 置空。标签保留为孤立标签，等待手动清理。 |
+| C-38 | 目录分离：后端 `backend/records/` 与 `backend/plans/`；前端 `src/subsystems/records/` 与 `src/subsystems/plans/`；跨子系统共享组件放 `src/components/`，外壳放 `src/shell/`。 |
+
+### 11.3 风险与陷阱
+
+| ID | 风险 | 影响 | 应对 |
+| --- | --- | --- | --- |
+| R-26 | 两个数据库文件被误当成一个备份/迁移 | 高 | 启动日志同时打印两个路径；README 明确备份整个 `data/`；API 不跨库 JOIN |
+| R-27 | 非法状态跳转（如搁置直接完成）绕过规则 | 高 | 服务端白名单校验；UI 只展示允许的目标状态；409 + `invalid_transition` |
+| R-28 | 完成时进度不足 100、或节点未完成 | 中 | 完成前校验未放弃节点；自动补一条 +Δ 进度日志到 100% |
+| R-29 | 进度删除/回退后 SUM 与显示值不一致 | 中 | 保存 `progress_after`，按时间顺序重算；后端测试覆盖 +100/-100/删除 |
+| R-30 | 节点权重为 0 / 全部放弃导致除零 | 中 | 权重 ≥ 0.01；无有效节点时完成度回退为进度 |
+| R-31 | 节点依赖形成环 | 中 | 单前置依赖；保存时沿链检测；拒绝自依赖 |
+| R-32 | 父子计划形成环或超过一级 | 中 | 父计划必须无父；有子计划的计划不能再挂父；拒绝自指 |
+| R-33 | 计划标签误删记录标签 | 高 | 完全独立的表与清理接口；测试断言两库 schema 不交叉 |
+| R-34 | 移动端计划详情标题被操作按钮挤成竖排、Drawer 超宽 | 中 | `rootClassName` + ≤680px 全宽；header 两行；操作按钮保留文字 |
+| R-35 | 双库配置指向同一文件 | 高 | 启动时比较 resolve 路径并拒绝；`create_server` 同样校验 |
+| R-36 | 旧前端缓存或旧服务实例导致“功能没生效” | 中 | 资源 hash + `index.html` no-cache；端口独占；重新构建后重启 |
+| R-37 | 计划详情每次保存后跳回概览，打断连续录入 | 中 | 只在打开/切换计划时重置 tab；保存后保持当前 tab（BUG-015） |
+| R-38 | 计划标签与记录标签同名造成概念混淆 | 低 | 两个标签页分别标注数据文件；词库独立，互不引用 |
+
+### 11.4 建模与目录
+
+#### 11.4.1 存储模型
+
+`plans.db` 使用 7 张领域表 + 1 张基础设施表：
+
+```text
+app_meta(key, value)
+
+plans(id, title, content, plan_type, estimated_hours, actual_hours,
+      planned_start, planned_end, status, progress, parent_plan_id,
+      created_at, updated_at)
+  │ 1
+  ├── n plan_nodes(id, plan_id, name, planned_start, planned_end,
+  │                weight, status, depends_on_node_id, sort_order, ...)
+  │        │ 1
+  │        └── n plan_actuals(id, plan_id, node_id, actual_start,
+  │                         actual_end, description, evidence, ...)
+  ├── n plan_progress_logs(id, plan_id, node_id, changed_at, delta,
+  │                       progress_after, description, log_type, evidence, ...)
+  ├── n plan_status_logs(id, plan_id, from_status, to_status, reason, ...)
+  └── n plan_tag_links(plan_id, tag_id) ─── plan_tags(id, name)
+```
+
+| 表 | 作用 |
+| --- | --- |
+| `plans` | 计划主信息、状态、进度、父计划 |
+| `plan_nodes` | 时间节点、权重、状态、单前置依赖 |
+| `plan_actuals` | 实际时间点与证据说明 |
+| `plan_progress_logs` | 进度增减、阻塞、困难、变化后进度 |
+| `plan_status_logs` | 状态流转审计 |
+| `plan_tags` | 计划独立标签词库 |
+| `plan_tag_links` | 计划 × 标签多对多 |
+| `app_meta` | 计划库模式版本 |
+
+#### 11.4.2 状态机
+
+```text
+进行中 ──→ 完成 / 放弃 / 超时 / 搁置
+搁置   ──→ 进行中 / 放弃
+超时   ──→ 进行中 / 完成 / 放弃
+完成   ──→ 进行中（重新打开，写审计）
+放弃   ──→ 进行中（重新打开，写审计）
+```
+
+完成前置条件：所有未放弃节点均为完成；完成后进度补齐到 100%。放弃、搁置、超时必须填写原因。
+
+#### 11.4.3 目录
+
+```text
+backend/common.py
+backend/records/store.py     # records.db
+backend/plans/store.py       # plans.db
+server.py                    # HTTP + 静态托管
+src/shell/                   # AppShell、MainPage、导航
+src/subsystems/records/      # 记录页面与专属组件
+src/subsystems/plans/        # 计划页面、API、表单/详情/弹窗
+src/components/              # 共享 Markdown、标题、标签等
+```
+
+### 11.5 派生需求
+
+| ID | 派生需求 | 优先级 | 验收标准 |
+| --- | --- | --- | --- |
+| DR-34 | 固定主页面：两个子系统入口、统计与最近内容 | Must | `/` 展示通用记录/计划管理卡片与实时统计；点击进入对应子系统 |
+| DR-35 | 动态侧边栏：始终含「主页面」，按子系统切换菜单 | Must | 记录页显示类型/标签；计划页显示三类/标签；主页面显示子系统入口 |
+| DR-36 | 双数据库与启动参数 | Must | 默认 `data/records.db` + `data/plans.db`；`--db/--plan-db` 与 `GRS_DB/GRS_PLAN_DB` 生效；同文件被拒绝 |
+| DR-37 | 计划 CRUD 与三类子页面 | Must | 创建/编辑/删除；长远/中期/短期页面按类型过滤；类型可改 |
+| DR-38 | 状态流转、原因与审计 | Must | 服务端白名单；非法跳转 409；完成校验节点；状态历史完整；重新打开留痕 |
+| DR-39 | 节点、依赖、权重与完成度 | Must | 节点 CRUD；单前置依赖拒绝环；权重汇总完成度；完成状态校验 |
+| DR-40 | 实际时间点 | Must | 起止校验；时长计算；节点关联；证据文本；终态可补录 |
+| DR-41 | 进度历史与重算 | Must | 增减/0；阻塞/困难；`progress_after`；删除后重算；终态锁定 |
+| DR-42 | 计划标签三表与标签页 | Must | 独立词库；计数/排序/搜索；AND 筛选；孤立清理不影响记录标签 |
+| DR-43 | 计划多字段筛选 | Must | 关键词、状态、标签、进度、时间线、排序；空状态与重置 |
+| DR-44 | 一级父子计划 | Should | 父计划无父；有子计划不能挂父；删除父计划子计划变根 |
+| DR-45 | 计划表单/详情 Drawer | Must | 创建编辑；详情 tabs（概览/节点/实际/进度/状态）；操作反馈 |
+| DR-46 | 桌面与移动端适配 | Must | 移动端无页面级横向溢出；详情 header 不竖排；列表显示状态/进度 |
+| DR-47 | 启动脚本与双库提示 | Must | `start.bat` 传递两个 DB；日志打印两路径；端口独占仍生效 |
+| DR-48 | 自动化测试 | Must | 35 项后端测试通过；覆盖状态机、进度、节点、实际、筛选、隔离 |
+| DR-49 | 文档与截图 | Must | requirement / bug-tracks / README / 桌面与移动截图齐全 |
+| DR-50 | 保留通用记录 | Must | v1.0/v1.1 的 17 项测试继续通过；记录数据文件不被修改 |
+
+### 11.6 满意度关系（v1.2）
+
+| 输入需求 | 满足它的派生需求 | 说明 |
+| --- | --- | --- |
+| IR-19 固定主页面 + 动态侧边栏 | DR-34、DR-35 | 主页面入口卡片 + 子系统上下文菜单 + 永久主页面项 |
+| IR-20 目录分离 | C-38、DR-36、DR-49 | 前后端按子系统分目录 |
+| IR-21 / IR-22 计划属性与三类页面 | DR-37、DR-45 | 计划 CRUD、类型字段、三类路由 |
+| IR-23 状态与流转 | DR-38、DR-39 | 白名单、原因、审计、完成节点校验 |
+| IR-24 节点/实际时间点 | DR-39、DR-40 | 节点、依赖、权重、实际起止与时长 |
+| IR-25 进度/完成度/阻塞 | DR-39、DR-41 | 日志增减、完成度加权、阻塞/困难 |
+| IR-26 计划标签三表 | DR-42 | 独立词库 + 关系表 |
+| IR-27 搜索过滤 | DR-43 | 关键词/状态/标签/进度/时间线 |
+| IR-28 计划标签页 | DR-42 | 计数、排序、搜索、清理 |
+| IR-29 数据库隔离 | DR-36、DR-50 | 两文件、两连接、无跨库 JOIN |
+| IR-30 保留记录功能 | DR-50 | 记录子系统回归测试与数据文件保持不变 |
+| IR-31 父计划 | DR-44 | 一级父子关系与循环防护 |
+
+### 11.7 资格策略与结果（v1.2）
+
+| ID | 资格活动 | 通过标准 | 结果 |
+| --- | --- | --- | --- |
+| QV-18 | 主页面与侧边栏 | 两个入口；点击切换；任何页面都能回主页面 | **通过** |
+| QV-19 | 计划创建/编辑/删除/类型页 | 3 类页面；表单保存；列表刷新；详情正确 | **通过** |
+| QV-20 | 状态流转与审计 | 非法跳转 409；原因校验；完成节点校验；重开留痕 | **通过** |
+| QV-21 | 进度历史 | +/−/0；阻塞/困难；`progress_after`；删除重算；终态锁定 | **通过** |
+| QV-22 | 节点与完成度 | 权重汇总；放弃排除；依赖环拒绝；完成校验 | **通过** |
+| QV-23 | 实际时间点 | 起止校验；时长；节点关联；终态补录 | **通过** |
+| QV-24 | 标签与筛选 | 独立词库；AND；计数；清理；多字段过滤 | **通过** |
+| QV-25 | 双库隔离 | 两库表集合不交叉；同文件启动被拒；`/api/overview` 正常 | **通过** |
+| QV-26 | 移动端/构建/CSP | 390px 无页面级横向溢出；详情 header 可读；0 console error | **通过** |
+
+执行证据：
+
+- 后端测试：**35 项全部通过**（记录 17 + 计划 18），覆盖独立 DB schema、状态机、进度重算、节点依赖、实际时间点、筛选、标签隔离、父计划与端口独占。
+- 浏览器 E2E：**11 项断言通过**，覆盖创建计划、详情、进度 100%、完成、重新打开审计、删除、筛选空状态、记录页隔离、移动端主页面/计划页无横向溢出；使用干净 Edge（无扩展）时 **console error = 0**。
+- 生产构建：3,329 modules；JS 约 1.52 MB（gzip 约 474 kB），CSS 约 60.9 kB。
+- 生产 CSP：首页、计划总览、三类列表、标签页、详情 Drawer、表单 Drawer 均正常。
+- 截图：`docs/screenshots/main-v12.png`、`plans-overview.png`、`plans-short.png`、`plans-tags.png`、`plan-form.png`、`plan-detail.png`、`plan-nodes.png`、`plan-progress.png`、`mobile-main-v12.png`、`mobile-plans-v12.png`、`mobile-detail-v12.png`。
+- 数据保护：E2E 使用 `data/e2e-records.db` / `data/e2e-plans.db` 副本，未修改用户 `data/records.db`。
+
+### 11.8 v1.2 验收结论
+
+IR-19～IR-31 均已满足；其中 IR-31 按顾客确认收敛为一级父子计划。计划与记录在代码、数据文件、标签词库和状态语义上完全分离，主页面提供统一入口。v1.2 未引入需要顾客重新定义产品范围的阻塞项；未实现的「变更转移」和「文件上传附件」已明确记录为顾客确认的范围边界。
+
+---
+
+## 12. v1.3 需求变更（CR-03：启动配置文件）
+
+### 12.1 变更输入
+
+| ID | 变更输入 | 优先级 |
+| --- | --- | --- |
+| IR-32 | 添加启动配置文件，可配置端口号、数据库文件等启动参数 | Must |
+| IR-33 | 配置文件不破坏现有一键启动、双库隔离与命令行/环境变量用法 | Must |
+
+### 12.2 澄清、假设与协议
+
+| ID | 澄清 / 决策 |
+| --- | --- |
+| C-39 | 使用项目根目录 **`config.json`**（JSON，标准库可直接解析），不引入 INI/YAML 依赖。 |
+| C-40 | 配置字段：`host`、`port`、`records_db`、`plans_db`、`open_browser`、`debug`。未知字段直接报错，避免拼写错误被静默忽略。 |
+| C-41 | 优先级：**命令行参数 > `GRS_*` 环境变量 > `config.json` > 内置默认值**。这样临时覆盖和持久配置都可用。 |
+| C-42 | `config.json` 中的相对路径按**配置文件所在目录**解析；环境变量/CLI 的相对路径按当前工作目录解析（`start.bat` 会先 `cd` 到项目根目录）。 |
+| C-43 | 配置校验：JSON 对象、字段类型、端口 1–65535、两个数据库路径不能相同；支持 UTF-8 与 UTF-8 BOM（兼容 Windows 记事本/PowerShell）。 |
+| C-44 | `start.bat` 不再硬编码 `--port 8765` / `--open` / DB 参数；只传 `--no-open`（按需）。端口、数据库、是否打开浏览器由配置/环境决定。 |
+| C-45 | 环境变量：`GRS_HOST`、`GRS_PORT`、`GRS_DB`、`GRS_PLAN_DB`、`GRS_OPEN_BROWSER`、`GRS_DEBUG`；布尔值接受 1/0、true/false、yes/no、on/off。 |
+| C-46 | 默认路径下 `config.json` 缺失时使用内置默认值；显式 `--config missing.json` 视为错误，避免“以为加载了实际没加载”。 |
+| C-47 | 配置文件只保存本地启动参数，不包含账号、令牌等敏感信息；服务默认仅监听 `127.0.0.1`。 |
+| C-48 | `--config` 允许手动指定其他配置文件；`start.bat` 固定使用根目录 `config.json`，保持一键启动简单。 |
+
+### 12.3 风险与陷阱
+
+| ID | 风险 | 影响 | 应对 |
+| --- | --- | --- | --- |
+| R-39 | 配置字段拼写错误被静默忽略，实际仍用默认值 | 高 | 未知字段报错；启动横幅打印实际配置文件与覆盖项 |
+| R-40 | `start.bat` 继续硬编码端口，导致配置永远不生效 | 高 | 启动脚本不再传 `--port/--open/DB`；由 server 读取配置 |
+| R-41 | Windows 编辑器写入 UTF-8 BOM，`json.load` 报错 | 中 | 使用 `utf-8-sig` 读取；新增 BOM 测试 |
+| R-42 | 相对路径以 cwd 解析导致从其他目录启动时找不到数据库 | 中 | 配置文件路径按配置目录解析；文档明确 |
+| R-43 | `records_db` 与 `plans_db` 指向同一文件，双库隔离失效 | 高 | 加载阶段比较 resolve 路径并拒绝；`create_server` 再次校验 |
+| R-44 | 环境变量/CLI 与配置文件不一致，用户以为配置没生效 | 中 | 启动横幅打印 `Config` / `Overrides`；README 给出优先级 |
+| R-45 | 端口被占用时错误信息仍提示旧端口 | 低 | 使用最终生效的 host/port 输出错误与 URL |
+
+### 12.4 配置模型
+
+```json
+{
+  "host": "127.0.0.1",
+  "port": 8765,
+  "records_db": "data/records.db",
+  "plans_db": "data/plans.db",
+  "open_browser": true,
+  "debug": false
+}
+```
+
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `host` | string | `127.0.0.1` | 监听地址 |
+| `port` | 1–65535 | `8765` | 服务端口 |
+| `records_db` | string | `data/records.db` | 记录库路径 |
+| `plans_db` | string | `data/plans.db` | 计划库路径，不能与记录库相同 |
+| `open_browser` | boolean | `true` | 启动后打开浏览器 |
+| `debug` | boolean | `false` | 打印异常堆栈 |
+
+优先级：
+
+```text
+CLI（--host/--port/--db/--plan-db/--open/--no-open/--debug）
+  > GRS_* 环境变量
+  > config.json
+  > 内置默认值
+```
+
+### 12.5 派生需求
+
+| ID | 派生需求 | 优先级 | 验收标准 |
+| --- | --- | --- | --- |
+| DR-51 | `backend/config.py`：读取/校验 `config.json` | Must | 字段类型、端口、路径、同文件检查；错误信息明确 |
+| DR-52 | 配置优先级：CLI > env > file > defaults | Must | 单测覆盖 env 覆盖；手工验证 CLI 覆盖；启动横幅显示来源 |
+| DR-53 | 相对路径按配置文件目录解析 | Must | 配置文件在子目录时 DB 仍落在配置目录下 |
+| DR-54 | `start.bat` 移除硬编码启动参数 | Must | 修改 config port 后一键启动使用新端口；`--no-open` 仍可用 |
+| DR-55 | UTF-8 BOM 与非法配置处理 | Must | BOM 配置可读；非法 JSON/未知字段/越界端口失败退出 |
+| DR-56 | 文档与测试 | Must | README 配置章节、requirement、bug-tracks；新增配置测试 |
+
+### 12.6 满意度关系（v1.3）
+
+| 输入需求 | 满足它的派生需求 | 说明 |
+| --- | --- | --- |
+| IR-32 启动配置文件 | DR-51、DR-53、DR-55 | JSON 配置、路径解析、校验 |
+| IR-33 不破坏现有启动方式 | DR-52、DR-54、DR-56 | 优先级、start.bat 去硬编码、文档与测试 |
+
+### 12.7 资格策略与结果（v1.3）
+
+| ID | 资格活动 | 通过标准 | 结果 |
+| --- | --- | --- | --- |
+| QV-27 | 配置文件端口/数据库 | 使用 `--config` 启动，端口、记录库、计划库均来自配置 | **通过**（8785，`config-records.db` / `config-plans.db`） |
+| QV-28 | 命令行/环境变量优先级 | CLI 端口与 DB 覆盖配置；`start.bat` + `GRS_*` 覆盖默认配置 | **通过**（8786 / 8787） |
+| QV-29 | 非法配置 | 非法端口 / 未知字段 / 同文件 / 缺失显式配置均失败并输出 `[ERROR]` | **通过** |
+| QV-30 | BOM 与一键启动 | UTF-8 BOM 配置可加载；`start.bat --no-open` 使用 env 覆盖正常启动 | **通过** |
+
+执行证据：
+
+- 后端测试：**43 项全部通过**（记录 17 + 计划 18 + 配置 8）。
+- 配置启动：8785 使用 `config.json` 的端口与相对 DB 路径，健康检查返回 `1.3.0`。
+- CLI 覆盖：8786 同时使用 `--port/--db/--plan-db`，实际生效并在横幅显示 `Overrides`。
+- `start.bat` + 环境变量：8787，`GRS_DB` / `GRS_PLAN_DB` 均生效，`GRS_OPEN_BROWSER=0` 不打开浏览器。
+- 非法配置：`{"port": 0}` 返回退出码 1，输出 `Invalid startup configuration: port must be between 1 and 65535`。
+- 前端无 UI 改动；`dist/` 继续使用 v1.2 构建产物。
+
+### 12.8 v1.3 验收结论
+
+IR-32、IR-33 均满足。启动参数从代码/脚本中抽离到 `config.json`，同时保留 CLI 与环境变量的临时覆盖能力；`start.bat` 不再强制端口或浏览器行为。配置错误会在启动阶段明确失败，避免“配置看起来改了但实际没生效”。
+
+---
+
+## 13. 变更记录
 
 | 版本 | 日期 | 变更 | 作者 |
 | --- | --- | --- | --- |
 | v1.0 | 2026-10-28 | 初始需求基线；完成实现、测试、构建、E2E、启动脚本与文档 | 实现团队 |
 | v1.1 | 2026-10-29 | CR-01：标题预览与悬浮完整内容；详情复制全文与字段复制；移动端适配；单端口独占修复 | 实现团队 |
+| v1.2 | 2026-11-02 | CR-02：计划管理子系统；固定主页面与动态侧边栏；双数据库/双目录隔离；计划节点、实际时间点、进度与状态审计、独立标签；35 项后端测试与浏览器回归 | 实现团队 |
+| v1.3 | 2026-11-02 | CR-03：`config.json` 启动配置（host/port/双数据库/浏览器/调试）；CLI/env/file/default 优先级；BOM 兼容；`start.bat` 去硬编码；43 项后端测试 | 实现团队 |
 
 ---
 
@@ -512,26 +810,36 @@ IR-17、IR-18 均已满足；复制内容与展示内容分离，完整标题不
 
 | 需求主题 | 代码入口 |
 | --- | --- |
-| 数据库模式 / 种子 / API | `server.py` |
-| 总览 | `src/pages/HomePage.jsx` |
-| 记录列表 / 搜索 / 抽屉 | `src/pages/RecordsPage.jsx`、`src/components/RecordViewDrawer.jsx`、`src/components/RecordFormDrawer.jsx` |
-| 标签库 | `src/pages/TagsPage.jsx` |
-| 标签筛选 | `src/pages/TagFilterPage.jsx` |
-| 类型管理 | `src/pages/TypesPage.jsx`、`src/components/TypeFormModal.jsx` |
-| Markdown | `src/components/Markdown.jsx`、`src/components/MarkdownEditor.jsx` |
-| 标题预览 / 复制 | `src/components/TitleText.jsx`、`src/recordText.js`、`src/clipboard.js`、`src/components/RecordViewDrawer.jsx` |
-| 启动 | `start.bat`、`server.py --open` |
-| 自动化测试 | `tests/test_api.py` |
+| 公共 SQLite / 校验 | `backend/common.py` |
+| 启动配置加载 / 优先级 | `backend/config.py`、`config.json` |
+| 记录库模式与数据层 | `backend/records/store.py` |
+| 计划库模式与数据层 | `backend/plans/store.py` |
+| HTTP 路由 / 静态托管 / 启动 | `server.py` |
+| 外壳、主页面、动态导航 | `src/shell/AppShell.jsx`、`src/shell/MainPage.jsx`、`src/shell/navigation.js` |
+| 计划总览 / 三类列表 / 标签 | `src/subsystems/plans/pages/PlanOverviewPage.jsx`、`PlanListPage.jsx`、`PlanTagsPage.jsx` |
+| 计划表单 / 详情 / 弹窗 | `src/subsystems/plans/components/PlanFormDrawer.jsx`、`PlanDetailDrawer.jsx`、`PlanStatusModal.jsx`、`PlanProgressModal.jsx` |
+| 计划 API 客户端 | `src/subsystems/plans/api.js` |
+| 记录页面 | `src/subsystems/records/pages/` |
+| 记录专属组件 | `src/subsystems/records/components/` |
+| 共享 Markdown / 标题 / 标签 | `src/components/` |
+| 启动 | `start.bat`、`config.json`、`server.py` |
+| 后端测试 | `tests/test_api.py`、`tests/test_plans.py`、`tests/test_config.py` |
 
-## 附录 B：v1.1 验收命令
+## 附录 B：v1.3 验收命令
 
 ```bash
-# 后端测试
+# 后端测试（43 项）
 python -m unittest discover -s tests -v
 
-# 前端生产构建
+# 前端生产构建（本版本无 UI 改动，可省略）
 npm run build
 
-# 启动（Windows）
+# 启动（Windows，读取 config.json）
 start.bat
+
+# 指定配置文件启动
+python server.py --config config.json
+
+# 临时命令行覆盖
+python server.py --port 8790 --db data/records.db --plan-db data/plans.db --open
 ```

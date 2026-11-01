@@ -16,13 +16,13 @@ import {
   SearchOutlined,
   TagsOutlined,
 } from '@ant-design/icons'
-import { api } from '../api'
-import { navigate, parseTags, tagFilterPath } from '../router'
-import { formatDate, formatShortDate } from '../utils'
-import PageHeader from '../components/PageHeader'
-import TagPill from '../components/TagPill'
-import TitleText from '../components/TitleText'
-import EmptyState from '../components/EmptyState'
+import { api } from '../../../api'
+import { navigate, parseTags, tagFilterPath } from '../../../router'
+import { formatDate, formatShortDate } from '../../../utils'
+import PageHeader from '../../../components/PageHeader'
+import TagPill from '../../../components/TagPill'
+import TitleText from '../../../components/TitleText'
+import EmptyState from '../../../components/EmptyState'
 import RecordViewDrawer from '../components/RecordViewDrawer'
 
 export default function TagFilterPage({ query }) {

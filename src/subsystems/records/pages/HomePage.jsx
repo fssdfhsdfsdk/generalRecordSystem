@@ -7,14 +7,14 @@ import {
   TagsOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons'
-import { api } from '../api'
-import { useAppData } from '../App'
-import { navigate, tagFilterPath } from '../router'
-import { formatShortDate } from '../utils'
-import EmptyState from '../components/EmptyState'
+import { api } from '../../../api'
+import { useAppData } from '../../../shell/AppDataContext'
+import { navigate, tagFilterPath } from '../../../router'
+import { formatShortDate } from '../../../utils'
+import EmptyState from '../../../components/EmptyState'
 import RecordViewDrawer from '../components/RecordViewDrawer'
-import TagPill from '../components/TagPill'
-import TitleText from '../components/TitleText'
+import TagPill from '../../../components/TagPill'
+import TitleText from '../../../components/TitleText'
 import TypeIcon, { typeVisual } from '../components/TypeIcon'
 
 export default function HomePage() {

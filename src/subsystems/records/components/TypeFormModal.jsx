@@ -15,7 +15,7 @@ import {
   DeleteOutlined,
   PlusOutlined,
 } from '@ant-design/icons'
-import { api } from '../api'
+import { api } from '../../../api'
 
 export default function TypeFormModal({ open, type, onClose, onSaved }) {
   const { message, modal } = AntApp.useApp()

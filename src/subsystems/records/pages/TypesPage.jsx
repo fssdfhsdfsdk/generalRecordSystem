@@ -15,12 +15,12 @@ import {
   PlusOutlined,
   SettingOutlined,
 } from '@ant-design/icons'
-import { useAppData } from '../App'
-import { api } from '../api'
-import { navigate } from '../router'
-import { formatDate } from '../utils'
-import PageHeader from '../components/PageHeader'
-import EmptyState from '../components/EmptyState'
+import { useAppData } from '../../../shell/AppDataContext'
+import { api } from '../../../api'
+import { navigate } from '../../../router'
+import { formatDate } from '../../../utils'
+import PageHeader from '../../../components/PageHeader'
+import EmptyState from '../../../components/EmptyState'
 import TypeIcon from '../components/TypeIcon'
 import TypeFormModal from '../components/TypeFormModal'
 

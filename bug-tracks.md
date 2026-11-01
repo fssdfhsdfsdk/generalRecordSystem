@@ -1,6 +1,6 @@
 # 开发缺陷记录（bug-tracks.md）
 
-本文档记录“拾录 · 通用记录系统”v1.0 与 v1.1 开发过程中实际遇到并修复的缺陷。格式遵循顾客要求：描述、背景与上下文、分析过程、根因、解决方法、时间。
+本文档记录“拾录 · 记录与计划工作台”v1.0、v1.1、v1.2 与 v1.3 开发过程中实际遇到并修复的缺陷。格式遵循顾客要求：描述、背景与上下文、分析过程、根因、解决方法、时间。
 
 ---
 
@@ -507,6 +507,317 @@ class AppHTTPServer(ThreadingHTTPServer):
 
 ---
 
+## BUG-014：进度历史先求和再整体截断，负向调整与删除后当前值不一致
+
+**描述：**  
+进度日志依次记录 `+30`、`-10`、`0`、`+100`、`-100` 后，计划进度显示 20 而不是 0；删除最后一条 `-100` 记录后显示 100，历史中的“累计”值与当前进度也对不上。
+
+**背景与上下文：**  
+v1.2 计划进度采用“历史变化累计”模型。最初实现为 `SUM(delta)` 后整体 `max(0, min(100, sum))`，每条日志不保存变化后的有效进度。
+
+**分析过程：**
+
+1. 后端测试按真实操作序列复现：`+30 → 30`、`-10 → 20`、`+100` 时 SUM 为 120，显示被截断为 100；
+2. 再记 `-100`，SUM 变为 20，显示 20，而不是从 100 回退到 0；
+3. 删除 `-100` 后 SUM 回到 120，显示又变回 100；
+4. 确认问题不是前端，而是“只在聚合后截断”，历史中的每条变化没有生效后的值；
+5. 改为按 `changed_at, id` 顺序逐条累计、逐条截断，并在日志表增加 `progress_after`；
+6. 删除任意日志后按同一顺序重算并回写 `progress_after`。
+
+**根因：**  
+进度是有边界的路径依赖状态，不能用无界 SUM 的最终截断代替逐条状态转移。超过 100 的部分没有“丢失记录”，导致后续负向变化先抵消溢出部分，而不是从 100 回退。
+
+**解决方法：**
+
+- `plan_progress_logs` 增加 `progress_after`，记录每条变化后的有效进度；
+- `_recompute_progress()` 按时间顺序逐条 `clamp(0, 100)`；
+- 完成计划自动补进度时写入 `progress_after = 100`；
+- 新增迁移：旧 `plans.db` 缺失该列时 `ALTER TABLE`；
+- 测试覆盖 `+30/-10/0/+100/-100`、删除最后一条与删除中间条目。
+
+**时间：** 2026-11-02 04:22–04:26 +08:00
+
+---
+
+## BUG-015：保存进度/节点/状态后，计划详情自动跳回“概览”标签
+
+**描述：**  
+在计划详情的“进度”标签记录进度后，抽屉刷新并跳回“概览”；节点、实际时间点、状态变更后也有同样现象，连续录入被打断。
+
+**背景与上下文：**  
+详情抽屉用一个 `reloadToken` 触发重新拉取计划。数据加载 `useEffect` 依赖 `open/currentId/reloadToken`，并在其中无条件 `setActiveTab('overview')`。
+
+**分析过程：**
+
+1. 浏览器 E2E 在记录进度后断言“累计 100%”，但页面已回到概览，断言失败；
+2. 检查 `PlanDetailDrawer`：每次保存都会 `reload()`，`reloadToken` 变化触发加载 effect；
+3. 加载 effect 内的 `setActiveTab('overview')` 把用户当前 tab 重置；
+4. 将 tab 重置拆到独立 effect，只在 `open` 或 `currentId` 变化时执行；
+5. 保存后保持当前 tab，E2E 断言恢复通过。
+
+**根因：**  
+“重新加载数据”和“切换计划”被混在同一个 effect 中，导致任何数据刷新都被当成一次新的详情打开。
+
+**解决方法：**
+
+```jsx
+useEffect(() => {
+  if (open) setActiveTab('overview')
+}, [open, currentId])
+
+useEffect(() => {
+  // 只负责拉取数据，不再修改 activeTab
+}, [open, currentId, reloadToken, message])
+```
+
+**时间：** 2026-11-02 04:50–04:54 +08:00
+
+---
+
+## BUG-016：移动端计划列表只剩标题和操作，状态/进度/耗时不可见
+
+**描述：**  
+390px 宽度下，计划表只显示“计划”和操作列；状态、进度、完成度、耗时都需要横向滚动才能看到，移动端无法快速判断计划状态。
+
+**背景与上下文：**  
+计划表为桌面设计，`scroll={{ x: 980 }}`，时间线/耗时/标签列使用 `responsive` 在窄屏隐藏，但没有把关键信息补回标题单元格。
+
+**分析过程：**
+
+1. 390px 截图确认只有标题与操作列；
+2. 检查表格列配置：状态/进度列未隐藏，但位于横向滚动区域之外；
+3. 决定不引入第二套卡片组件，而是在标题下增加移动端专属元信息行；
+4. 元信息行包含状态标签、进度、预估耗时，默认 `display:none`，≤680px 显示；
+5. 重新截图确认三项信息在首屏可见，页面级无横向溢出。
+
+**根因：**  
+响应式策略只做“隐藏次要列”，没有为窄屏保留最小决策信息集。
+
+**解决方法：**
+
+```jsx
+<span className="plan-title-mobile-meta">
+  <PlanStatusTag status={record.status} size="small" />
+  <span>{record.progress}%</span>
+  <span>{record.estimated_hours} h</span>
+</span>
+```
+
+```css
+.plan-title-mobile-meta { display: none; }
+@media (max-width: 680px) {
+  .plan-title-mobile-meta { display: flex; }
+}
+```
+
+**时间：** 2026-11-02 05:00–05:04 +08:00
+
+---
+
+## BUG-017：移动端计划详情标题被按钮挤成竖排，Drawer 宽度溢出
+
+**描述：**  
+390px 打开计划详情时，“中期计划”标题被压缩成逐字竖排；新建计划 Drawer 仍按 760px 宽度渲染，移动端体验严重变形。
+
+**背景与上下文：**  
+详情 Drawer 固定 `width={920}`，表单 `width={760}`；header 的关闭、编辑、变更状态、删除与标题在同一行。窄屏下标题区域被挤到不足 30px。
+
+**分析过程：**
+
+1. 390px 截图复现：header 左侧只剩一个窄条，标题逐字换行；
+2. 检查 DOM：Drawer content wrapper 仍按桌面宽度，header 没有换行策略；
+3. 为两个 Drawer 增加 `rootClassName`（`plan-detail-root` / `plan-form-root`），窄屏强制 `width:100%`；
+4. 详情 header 允许换行：标题占第一行，操作区占第二行；
+5. 操作按钮保留文字（编辑/变更状态/删除），不再只显示图标；
+6. 重新截图确认标题横排、按钮完整、内容不溢出。
+
+**根因：**  
+固定像素宽度与单行 header 没有移动端断点；仅隐藏按钮文字不能解决标题被挤压的问题。
+
+**解决方法：**
+
+```jsx
+<Drawer rootClassName="plan-detail-root" width={920} ... />
+<Drawer rootClassName="plan-form-root" width={760} ... />
+```
+
+```css
+@media (max-width: 680px) {
+  .plan-detail-root .ant-drawer-content-wrapper,
+  .plan-form-root .ant-drawer-content-wrapper { width: 100% !important; }
+  .plan-detail-root .ant-drawer-header { flex-wrap: wrap; }
+  .plan-detail-root .ant-drawer-header-title { flex: 1 1 100%; }
+  .plan-detail-root .ant-drawer-extra { width: 100%; }
+}
+```
+
+**时间：** 2026-11-02 05:03–05:07 +08:00
+
+---
+
+## BUG-018：打开计划抽屉时，侧边栏菜单文字被遮罩压到几乎不可见
+
+**描述：**  
+计划详情/表单 Drawer 打开后，左侧导航只剩图标可见，“计划管理”“计划总览”“长远计划”等文字几乎消失，看起来像侧边栏被折叠。
+
+**背景与上下文：**  
+Drawer 默认遮罩为 `rgba(0,0,0,0.45)`；侧边栏本身是深色 `#0b1220`，菜单文字为 `#94a3b8`。两层深色叠加后对比度骤降。
+
+**分析过程：**
+
+1. DOM 检查确认 Sider 仍是 252px、菜单为 `ant-menu-inline`，并未折叠；
+2. 计算遮罩后的文字对比度，发现灰色文字在深色背景上低于可读阈值；
+3. 为计划详情/表单两个 root 单独降低遮罩不透明度至 0.18；
+4. 截图确认菜单文字、分组标题恢复可读，同时抽屉仍有视觉分层。
+
+**根因：**  
+深色侧边栏与高不透明度黑色遮罩叠加，文字与背景对比度不足；不是布局或折叠状态问题。
+
+**解决方法：**
+
+```css
+.plan-detail-root .ant-drawer-mask,
+.plan-form-root .ant-drawer-mask {
+  background: rgba(15, 23, 42, 0.18);
+}
+```
+
+**时间：** 2026-11-02 05:06–05:09 +08:00
+
+---
+
+## BUG-019：计划表单“父计划（可选）”出现两个“（可选）”
+
+**描述：**  
+新建计划 Drawer 中，父计划字段标签显示为“父计划（可选） （可选）”，视觉重复。
+
+**背景与上下文：**  
+Form 使用 `requiredMark="optional"` 自动为非必填项追加“（可选）”；父计划标签又手写了“（可选）”。
+
+**分析过程：**
+
+1. 截图确认只有父计划字段重复，其他字段正常；
+2. 检查 `PlanFormDrawer` 的 Form.Item label；
+3. 移除标签中的手写“（可选）”，保留 Form 的统一标记；
+4. 重新截图确认只显示一次。
+
+**根因：**  
+表单级 optional 标记与字段标签内的手写标记重复。
+
+**解决方法：**
+
+```diff
+- <Form.Item name="parent_plan_id" label="父计划（可选）">
++ <Form.Item name="parent_plan_id" label="父计划">
+```
+
+**时间：** 2026-11-02 05:08 +08:00
+
+---
+
+## BUG-020：计划详情 KPI 四列与列表时间线在中等宽度下换行割裂
+
+**描述：**  
+920px 详情抽屉内四个 KPI 并排，“计划时间线”被压成两行，日期在 `2026-11-` 与 `30 18:00` 之间断开；列表 210px 时间线列也出现 `18:00` 单独换行。
+
+**背景与上下文：**  
+详情 KPI 使用 `repeat(4, 1fr)`，每个约 210px；列表时间线显示完整 `YYYY-MM-DD HH:mm → YYYY-MM-DD HH:mm`。
+
+**分析过程：**
+
+1. 桌面截图确认时间线在 KPI 与表格中都被不自然换行；
+2. 计算可用宽度：4 列 KPI 单列约 210px，完整时间线约 300px；
+3. KPI 改为 2×2，单列约 420px；移动端保持 1 列；
+4. 列表使用紧凑格式 `MM-DD HH:mm → MM-DD HH:mm`，详情仍显示完整年份；
+5. 重新截图确认无日期割裂。
+
+**根因：**  
+固定四列布局没有为最长文本保留最小宽度；列表与详情复用了同一完整格式。
+
+**解决方法：**
+
+```css
+.plan-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+```
+
+```js
+export function formatRangeCompact(start, end) {
+  const compact = (value) => value.slice(5, 16)
+  // ...
+}
+```
+
+**时间：** 2026-11-02 04:32–04:41 +08:00
+
+---
+
+## BUG-021：start.bat 硬编码 `--port 8765` 与 `--open`，config.json 永远不生效
+
+**描述：**  
+新增 `config.json` 后，把端口改成 8790，双击 `start.bat` 仍然监听 8765；把 `open_browser` 设为 false，浏览器仍会自动打开。
+
+**背景与上下文：**  
+原 `start.bat` 的逻辑是“计算 PORT（默认 8765，GRS_PORT 可覆盖）→ 调用 `server.py --port %PORT% ... --open`”。新增配置文件后，如果 Python 又从 config 读取默认值，命令行上的 `--port` 会按优先级覆盖 config。
+
+**分析过程：**
+
+1. 按优先级规则，CLI > env > file > defaults；
+2. 检查 `start.bat`，发现它无条件传 `--port 8765` 和 `--open`；
+3. 因此无论 `config.json` 写什么，端口和浏览器行为都被 CLI 覆盖；
+4. 移除 `start.bat` 对 port/db/open 的硬编码，只保留 `--no-open`；
+5. Python 直接读取 `config.json` 和 `GRS_*` 环境变量；
+6. 用 8787 环境变量启动 `start.bat --no-open`，确认端口、两个 DB、浏览器开关均按预期生效。
+
+**根因：**  
+启动脚本把“默认值”实现成了“命令行强制值”，与新增的配置优先级冲突。
+
+**解决方法：**
+
+```diff
+- %PYTHON_CMD% server.py --port %PORT% %DB_FLAG% %PLAN_DB_FLAG% %OPEN_FLAG%
++ %PYTHON_CMD% server.py %OPEN_FLAG%
+```
+
+同时更新错误提示，不再假定 8765，而是提示检查 `config.json` / `GRS_PORT`。
+
+**时间：** 2026-11-02 05:14–05:22 +08:00
+
+---
+
+## BUG-022：Windows 保存的 UTF-8 BOM 配置被 `json.load` 拒绝
+
+**描述：**  
+用 PowerShell `Set-Content -Encoding UTF8` 写测试配置后启动，输出：
+
+```text
+[ERROR] Invalid startup configuration: ... is not valid JSON (line 1, column 1):
+Unexpected UTF-8 BOM (decode using utf-8-sig)
+```
+
+**背景与上下文：**  
+Windows 记事本/PowerShell 可能给 UTF-8 文件加 BOM。Python 的 `Path.read_text(encoding="utf-8")` 不会自动去掉 BOM，`json.loads` 在第一个字符处失败。
+
+**分析过程：**
+
+1. 用十六进制查看配置开头，确认是 `EF BB BF`；
+2. 直接用 Python `json.load` 复现；
+3. 将读取编码改为 `utf-8-sig`，BOM 会被自动剥离；
+4. 增加 `test_utf8_bom_config_is_accepted` 回归测试；
+5. 重新启动 8785，配置端口与 DB 正常生效。
+
+**根因：**  
+配置读取没有兼容 Windows 常见的 UTF-8 BOM；错误被包装成“非法 JSON”，用户难以定位。
+
+**解决方法：**
+
+```python
+raw = path.read_text(encoding="utf-8-sig")
+```
+
+**时间：** 2026-11-02 05:20–05:23 +08:00
+
+---
+
 ## 附：验证方式
 
 | 缺陷 | 验证 |
@@ -524,5 +835,14 @@ class AppHTTPServer(ThreadingHTTPServer):
 | BUG-011 | 端口 8771 独立 DB 启动；日志与 `/api/health` 验证 |
 | BUG-012 | 390px 详情截图 + header 无横向溢出断言 |
 | BUG-013 | 同端口第二实例启动失败；`test_port_is_exclusive` 通过 |
+| BUG-014 | 进度序列测试、删除重算测试、`progress_after` 断言 |
+| BUG-015 | 浏览器 E2E 记录进度后保持“进度”tab，断言通过 |
+| BUG-016 | 390px 计划列表截图：状态/进度/耗时在首屏 |
+| BUG-017 | 390px 计划详情/表单截图：标题横排、Drawer 全宽 |
+| BUG-018 | 打开计划抽屉后侧边栏文字可读的截图检查 |
+| BUG-019 | 新建计划表单截图：父计划只有一个“（可选）” |
+| BUG-020 | 920px 详情与列表时间线截图，无日期割裂 |
+| BUG-021 | `start.bat` + `GRS_PORT=8787` 启动，配置/环境优先级验证 |
+| BUG-022 | UTF-8 BOM 配置启动成功；`test_utf8_bom_config_is_accepted` 通过 |
 
-上述缺陷修复后，最终回归结果：**17 个后端测试通过，v1.1 浏览器 E2E 的 23 项断言通过，生产构建成功，CSP 下无 console error**。
+上述缺陷修复后，最终回归结果：**43 个后端测试通过，浏览器 E2E（v1.2 功能基线）的 11 项断言保持通过，生产构建成功，干净 Edge / 生产 CSP 下 console error 为 0**。

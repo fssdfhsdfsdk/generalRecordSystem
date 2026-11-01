@@ -1,9 +1,9 @@
 {
   "name": "general-record-system",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.3.0",
   "type": "module",
-  "description": "A general, metadata-driven record system with types, custom fields and tags.",
+  "description": "A local workspace with metadata-driven records and plan management, backed by two isolated SQLite databases.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
