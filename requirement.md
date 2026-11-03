@@ -1,14 +1,14 @@
-# 拾录 · 记录与计划工作台（Record & Plan Workspace）— 需求与资格基线
+# 拾录 · 记录、计划与阅读工作台（Record, Plan & Reading Workspace）— 需求与资格基线
 
 | 项目 | 内容 |
 | --- | --- |
-| 产品名称 | 拾录 · 记录与计划工作台（Record & Plan Workspace） |
-| 文档版本 | v1.3 |
-| 基线日期 | 2026-11-02 |
-| 文档状态 | v1.0 / v1.1 / v1.2 已交付；v1.3 已实现并通过增量资格验证 |
+| 产品名称 | 拾录 · 记录、计划与阅读工作台（Record, Plan & Reading Workspace） |
+| 文档版本 | v1.4 |
+| 基线日期 | 2026-11-03 |
+| 文档状态 | v1.0 / v1.1 / v1.2 / v1.3 已交付；v1.4 已实现并通过增量资格验证 |
 | 需求提出方 | 顾客 |
 | 实现团队 | 开发代理（前端 / 后端 / 测试 / 文档） |
-| 资格验证 | 后端自动化测试、生产构建、浏览器端到端验证、启动脚本验证、双库隔离验证、配置文件优先级验证 |
+| 资格验证 | 后端自动化测试、生产构建、浏览器端到端验证、启动脚本验证、三库隔离验证、配置文件优先级验证 |
 | 关联文档 | [README.md](README.md)、[bug-tracks.md](bug-tracks.md)、[config.json](config.json) |
 
 ---
@@ -795,7 +795,127 @@ IR-32、IR-33 均满足。启动参数从代码/脚本中抽离到 `config.json`
 
 ---
 
-## 13. 变更记录
+## 13. v1.4 需求变更（CR-04：书籍与文档管理）
+
+### 13.1 变更输入
+
+| ID | 变更输入 | 优先级 |
+| --- | --- | --- |
+| IR-34 | 新增“书籍与文档管理”子系统，用于统一管理书籍、论文、文章博客日志、技术与规范类文档、商业与办公类文档 | Must |
+| IR-35 | 文档数据模型：名称、类型、文档信息（作者/时间/版本/资源地址等，可选）、标签、阅读笔记、阅读感想、阅读历史、阅读状态、阅读进度、优先级 | Must |
+| IR-36 | 页面：编辑页、浏览内容页（阅读历史默认折叠）、五类文档页面、类型管理页（默认五类）、标签管理页 | Must |
+| IR-37 | 新增独立数据库文件 `docs.db`，与 `records.db`、`plans.db` 隔离；启动配置支持第三个数据库 | Must |
+
+### 13.2 澄清、假设与协议
+
+| ID | 澄清 / 决策 |
+| --- | --- |
+| C-49 | 文档类型表在顾客给出的 `id/名称/描述` 之外增加内部 `slug`（仅用于默认类型稳定路由），不暴露在编辑表单中；用户新增类型 `slug` 为空。 |
+| C-50 | “文档信息”使用**单个自由文本列**保存作者、时间、版本、资源地址等，不拆成多个结构化字段。列表单列展示，超出预览长度显示 `...`，悬浮显示完整文本；浏览页显示完整内容。 |
+| C-51 | 阅读历史每条包含 `id`、开始时间、结束时间、耗时（小时，允许两位小数）、描述，均为可选；结束时间不能早于开始时间。浏览内容页使用折叠面板，**默认全部折叠**。 |
+| C-52 | 阅读状态（未阅读/进行中/完成）与阅读进度（0–100%）是独立字段；编辑页在状态切到“完成”时辅助填 100%，切到“未阅读”时归零，但服务端不强制耦合，允许用户自行调整。 |
+| C-53 | 优先级取值 1–5，默认 3；数字越大优先级越高。 |
+| C-54 | 文档标签采用三表模型：`documents` + `doc_tags` + `doc_tag_links`，与记录标签、计划标签完全独立。标签管理支持重命名、删除和孤立标签清理。 |
+| C-55 | 类型删除采用保护策略：类型下仍有文档时返回 409，必须先移动或删除文档。与通用记录“删除类型级联删除记录”的策略不同，原因是文档资料更昂贵、误删代价更高。 |
+| C-56 | 五个默认类型只在 `docs.db` 首次初始化时写入；之后允许改名、改描述或删除，重启不会重新注入。用户可继续新增自定义类型。 |
+| C-57 | 编辑页与浏览内容页都是独立整页，不使用 Drawer；这样长笔记、长感想与阅读历史有足够空间。 |
+| C-58 | 启动配置新增 `docs_db`，环境变量 `GRS_DOCS_DB`，命令行 `--docs-db`；三个数据库任意两个指向同一文件即拒绝启动。 |
+| C-59 | 产品版本升级为 v1.4.0；`/api/health` 返回三个数据库名称，`/api/overview` 同时返回记录、计划、文档统计。 |
+
+### 13.3 风险与陷阱
+
+| ID | 风险 | 影响 | 应对 |
+| --- | --- | --- | --- |
+| R-46 | 删除文档类型时连同大量文档一起误删 | 高 | 类型下仍有文档时拒绝删除；UI 明确提示先移动或删除文档 |
+| R-47 | 文档标签与记录/计划标签混用，破坏词库隔离 | 高 | 独立 `doc_tags` / `doc_tag_links` 表与独立 API；测试三库表集合不交叉 |
+| R-48 | 阅读历史很多时内容页过长、难浏览 | 中 | 使用默认折叠的 Collapse；标题显示条数与累计耗时 |
+| R-49 | 文档信息或标签过长破坏表格布局 | 中 | 单列省略 + Tooltip 完整显示；标签行单行省略并提供完整标签 Tooltip |
+| R-50 | 三库路径配置相同导致数据混写 | 高 | `config.py` 与 `create_server` 双重校验；单元测试覆盖 |
+| R-51 | 用户删除默认类型后，重启又被重新注入 | 中 | `app_meta.seed_version` 只初始化一次；测试删除后重新 init 仍为 4 个类型 |
+| R-52 | 阅读历史起止时间倒置或耗时为负 | 中 | 服务端 `parse_datetime_text` + `ensure_order` + `as_float` 校验；前端 DatePicker validator |
+| R-53 | 阅读状态与进度显示矛盾 | 中 | UI 在状态切换时提供辅助；数据层保持独立并在文档页同时展示，避免静默改动 |
+| R-54 | 文档数量增长后列表查询变慢 | 中 | 类型/状态/更新时间索引；单用户本地规模；一次返回后再前端分页 |
+
+### 13.4 数据模型与页面
+
+```text
+docs.db
+  doc_types(id, name, slug, description, created_at)
+        │ 1
+        ▼ n
+  documents(id, type_id, title, document_info, reading_notes,
+            reading_reflections, reading_status, reading_progress,
+            priority, created_at, updated_at)
+        │
+        ├── n doc_reading_history(id, document_id, start_at, end_at,
+        │                         duration_hours, description,
+        │                         created_at, updated_at)
+        └── n doc_tag_links(document_id, tag_id) ─── doc_tags(id, name)
+```
+
+| 页面 | 路由 | 说明 |
+| --- | --- | --- |
+| 文档总览 | `/docs` | 统计、类型卡片、正在读、最近更新、累计历史 |
+| 类型文档页 | `/docs/type/{id}` | 五类默认类型 + 自定义类型共用；筛选、排序、表格 |
+| 新建/编辑页 | `/docs/new?type={id}`、`/docs/{id}/edit` | 基本信息、标签、笔记、感想、阅读历史 |
+| 浏览内容页 | `/docs/{id}` | 只读展示；阅读历史默认折叠 |
+| 类型管理 | `/docs/types` | 新建、编辑、删除保护 |
+| 标签管理 | `/docs/tags` | 引用计数、搜索、排序、重命名、删除、清理 |
+
+### 13.5 派生需求
+
+| ID | 派生需求 | 优先级 | 验收标准 |
+| --- | --- | --- | --- |
+| DR-57 | `backend/docs/store.py`：独立 docs.db schema、迁移与种子 | Must | 新建库含 6 张表；五类默认类型；重复 init 不重复注入 |
+| DR-58 | 文档 CRUD 与文档信息单列 | Must | 名称/类型必填；信息可选；列表省略 + 悬浮完整；详情返回全部字段 |
+| DR-59 | 阅读笔记、阅读感想与 Markdown | Must | 分别保存；支持 GFM；浏览页分节渲染；空状态提示 |
+| DR-60 | 阅读状态、进度、优先级 | Must | 状态枚举；进度 0–100；优先级 1–5；边界校验 |
+| DR-61 | 阅读历史 | Must | 多条排序；起止/耗时/描述可选；结束早于开始报错；内容页默认折叠 |
+| DR-62 | 文档标签三表与标签管理 | Must | 独立词库；计数；重命名；删除；孤立清理；与记录/计划标签隔离 |
+| DR-63 | 类型管理与删除保护 | Must | 默认五类；新增/改名/描述；有文档时 409 |
+| DR-64 | 页面、侧边栏与主页面入口 | Must | 6 个文档页面可达；侧边栏显示类型与计数；主页面第三张卡片 |
+| DR-65 | 第三数据库配置与隔离 | Must | `docs_db` / `GRS_DOCS_DB` / `--docs-db` 生效；三路径互异；健康检查与 overview 含 docs |
+| DR-66 | 自动化测试 | Must | 新增文档测试 14 项；全量 57 项通过 |
+| DR-67 | 文档、截图与版本 | Must | README / requirement / bug-tracks / 桌面与移动截图；版本 1.4.0 |
+
+### 13.6 满意度关系（v1.4）
+
+| 输入需求 | 满足它的派生需求 | 说明 |
+| --- | --- | --- |
+| IR-34 新增文档子系统 | DR-57、DR-64 | 独立数据层、页面、导航与主页面入口 |
+| IR-35 文档数据模型 | DR-58、DR-59、DR-60、DR-61 | CRUD、信息单列、笔记/感想、状态/进度/优先级、历史 |
+| IR-36 页面与默认类型 | DR-62、DR-63、DR-64 | 五类页面、内容页折叠历史、类型/标签管理 |
+| IR-37 docs.db 隔离 | DR-65 | 三库路径配置、双路径校验、三连接读取 |
+
+### 13.7 资格策略与结果（v1.4）
+
+| ID | 资格活动 | 通过标准 | 结果 |
+| --- | --- | --- | --- |
+| QV-31 | docs.db schema 与默认类型 | 6 张表；五类名称/slug/描述；重复 init 幂等 | **通过** |
+| QV-32 | 文档 CRUD | 默认值、完整字段、局部更新、类型迁移、删除 | **通过** |
+| QV-33 | 阅读历史 | 嵌套保存/替换保持 id、独立子路由、倒置时间/负耗时拒绝 | **通过** |
+| QV-34 | 筛选与搜索 | 类型、状态、优先级、标签 AND、`100%` 转义、排序、limit | **通过** |
+| QV-35 | 标签三表 | 计数、重命名、冲突 409、删除关联、孤立清理 | **通过** |
+| QV-36 | 类型管理保护 | 新增/编辑；有文档删除 409；空类型可删除 | **通过** |
+| QV-37 | 页面与浏览器 E2E | 新建/编辑/删除；笔记感想保存；历史默认折叠/展开；类型新建/删除 | **通过**（8 项断言） |
+| QV-38 | 三库隔离与启动配置 | health 三库列表；overview 三块统计；同文件拒绝；8775 三库独立路径 | **通过** |
+| QV-39 | 桌面/移动端 | 1440px 与 390px 无页面级横向溢出；0 条应用 console error | **通过** |
+
+执行证据：
+
+- 后端测试：**57 项全部通过**（记录 17 + 计划 18 + 文档 14 + 配置 8）。
+- 文档 E2E：8 项断言通过；应用 console error = 0（已排除 headless Edge 浏览器扩展的 CSP 日志）。
+- 文档数据：使用 `data/e2e-*.db` 独立副本，未修改用户 `data/records.db` / `data/plans.db`；未生成真实 `data/docs.db`。
+- 生产构建：3,343 modules；JS 约 1.575 MB，CSS 约 82.3 KB。
+- 截图：`main-v14.png`、`docs-overview.png`、`docs-books.png`、`doc-content.png`、`doc-history.png`、`doc-edit.png`、`docs-types.png`、`docs-tags.png`、`mobile-main-v14.png`、`mobile-docs-v14.png`、`mobile-docs-list-v14.png`、`mobile-doc-content-v14.png`。
+
+### 13.8 v1.4 验收结论
+
+IR-34～IR-37 均满足。书籍与文档管理作为第三个子系统，拥有独立的 `docs.db`、独立标签词库、五类默认类型与完整阅读工作流；启动配置、健康检查与主页面统计同步扩展到三库。类型删除保护与阅读历史默认折叠按顾客要求实现，未引入需要重新定义产品范围的阻塞项。
+
+---
+
+## 14. 变更记录
 
 | 版本 | 日期 | 变更 | 作者 |
 | --- | --- | --- | --- |
@@ -803,6 +923,7 @@ IR-32、IR-33 均满足。启动参数从代码/脚本中抽离到 `config.json`
 | v1.1 | 2026-10-29 | CR-01：标题预览与悬浮完整内容；详情复制全文与字段复制；移动端适配；单端口独占修复 | 实现团队 |
 | v1.2 | 2026-11-02 | CR-02：计划管理子系统；固定主页面与动态侧边栏；双数据库/双目录隔离；计划节点、实际时间点、进度与状态审计、独立标签；35 项后端测试与浏览器回归 | 实现团队 |
 | v1.3 | 2026-11-02 | CR-03：`config.json` 启动配置（host/port/双数据库/浏览器/调试）；CLI/env/file/default 优先级；BOM 兼容；`start.bat` 去硬编码；43 项后端测试 | 实现团队 |
+| v1.4 | 2026-11-03 | CR-04：书籍与文档管理子系统；`docs.db` 三库隔离；五类默认类型；阅读笔记/感想/历史/状态/进度/优先级；文档标签三表；类型与标签管理；57 项后端测试、8 项文档 E2E | 实现团队 |
 
 ---
 
@@ -814,32 +935,36 @@ IR-32、IR-33 均满足。启动参数从代码/脚本中抽离到 `config.json`
 | 启动配置加载 / 优先级 | `backend/config.py`、`config.json` |
 | 记录库模式与数据层 | `backend/records/store.py` |
 | 计划库模式与数据层 | `backend/plans/store.py` |
+| 文档库模式与数据层 | `backend/docs/store.py` |
 | HTTP 路由 / 静态托管 / 启动 | `server.py` |
 | 外壳、主页面、动态导航 | `src/shell/AppShell.jsx`、`src/shell/MainPage.jsx`、`src/shell/navigation.js` |
 | 计划总览 / 三类列表 / 标签 | `src/subsystems/plans/pages/PlanOverviewPage.jsx`、`PlanListPage.jsx`、`PlanTagsPage.jsx` |
 | 计划表单 / 详情 / 弹窗 | `src/subsystems/plans/components/PlanFormDrawer.jsx`、`PlanDetailDrawer.jsx`、`PlanStatusModal.jsx`、`PlanProgressModal.jsx` |
 | 计划 API 客户端 | `src/subsystems/plans/api.js` |
+| 文档总览 / 类型列表 / 内容 / 编辑 | `src/subsystems/docs/pages/DocsOverviewPage.jsx`、`DocListPage.jsx`、`DocContentPage.jsx`、`DocEditPage.jsx` |
+| 文档类型 / 标签管理 | `src/subsystems/docs/pages/DocTypesPage.jsx`、`DocTagsPage.jsx` |
+| 文档 API / 组件 | `src/subsystems/docs/api.js`、`src/subsystems/docs/components/` |
 | 记录页面 | `src/subsystems/records/pages/` |
 | 记录专属组件 | `src/subsystems/records/components/` |
-| 共享 Markdown / 标题 / 标签 | `src/components/` |
+| 共享 Markdown / 标题 / 标签 / 省略文本 | `src/components/` |
 | 启动 | `start.bat`、`config.json`、`server.py` |
-| 后端测试 | `tests/test_api.py`、`tests/test_plans.py`、`tests/test_config.py` |
+| 后端测试 | `tests/test_api.py`、`tests/test_plans.py`、`tests/test_docs.py`、`tests/test_config.py` |
 
-## 附录 B：v1.3 验收命令
+## 附录 B：v1.4 验收命令
 
 ```bash
-# 后端测试（43 项）
+# 后端测试（57 项）
 python -m unittest discover -s tests -v
 
-# 前端生产构建（本版本无 UI 改动，可省略）
+# 前端生产构建
 npm run build
 
 # 启动（Windows，读取 config.json）
 start.bat
 
-# 指定配置文件启动
+# 指定配置文件启动（三库）
 python server.py --config config.json
 
 # 临时命令行覆盖
-python server.py --port 8790 --db data/records.db --plan-db data/plans.db --open
+python server.py --port 8790 --db data/records.db --plan-db data/plans.db --docs-db data/docs.db --open
 ```

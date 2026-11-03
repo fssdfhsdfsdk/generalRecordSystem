@@ -24,8 +24,13 @@ class ApiTestCase(unittest.TestCase):
         self.temp_dir = Path(tempfile.mkdtemp(prefix="grs-test-"))
         self.db_path = self.temp_dir / "test.db"
         self.plan_db_path = self.temp_dir / "plans.db"
+        self.docs_db_path = self.temp_dir / "docs.db"
         self.httpd = server.create_server(
-            "127.0.0.1", 0, self.db_path, plan_db_path=self.plan_db_path
+            "127.0.0.1",
+            0,
+            self.db_path,
+            plan_db_path=self.plan_db_path,
+            docs_db_path=self.docs_db_path,
         )
         self.port = self.httpd.server_address[1]
         self.base = f"http://127.0.0.1:{self.port}"
@@ -140,6 +145,8 @@ class ApiTestCase(unittest.TestCase):
         status, data = self.request("GET", "/api/health")
         self.assertEqual(status, 200)
         self.assertEqual(data["status"], "ok")
+        self.assertEqual(data["databases"], ["records.db", "plans.db", "docs.db"])
+        self.assertEqual(data["version"], "1.4.0")
 
     # -- types -----------------------------------------------------------
     def test_create_type_and_duplicate_name(self):

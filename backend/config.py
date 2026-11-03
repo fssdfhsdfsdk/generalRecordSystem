@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping
 
-from .common import DEFAULT_DB, DEFAULT_PLAN_DB, ROOT
+from .common import DEFAULT_DB, DEFAULT_DOC_DB, DEFAULT_PLAN_DB, ROOT
 
 CONFIG_FILENAME = "config.json"
 ALLOWED_KEYS = {
@@ -26,6 +26,7 @@ ALLOWED_KEYS = {
     "port",
     "records_db",
     "plans_db",
+    "docs_db",
     "open_browser",
     "debug",
 }
@@ -43,6 +44,7 @@ class AppConfig:
     port: int
     records_db: Path
     plans_db: Path
+    docs_db: Path
     open_browser: bool
     debug: bool
     source: Path | None = None
@@ -159,11 +161,13 @@ def load_config(
     port = _as_port(take("port", 8765), "port")
     records_raw = take("records_db", str(DEFAULT_DB.relative_to(ROOT)))
     plans_raw = take("plans_db", str(DEFAULT_PLAN_DB.relative_to(ROOT)))
+    docs_raw = take("docs_db", str(DEFAULT_DOC_DB.relative_to(ROOT)))
     open_browser = _as_bool(take("open_browser", True), "open_browser")
     debug = _as_bool(take("debug", False), "debug")
 
     records_db = _as_path(records_raw, "records_db", base)
     plans_db = _as_path(plans_raw, "plans_db", base)
+    docs_db = _as_path(docs_raw, "docs_db", base)
 
     if "GRS_HOST" in env:
         host = _as_text(env["GRS_HOST"], "GRS_HOST")
@@ -177,6 +181,9 @@ def load_config(
     if "GRS_PLAN_DB" in env:
         plans_db = _as_path(env["GRS_PLAN_DB"], "GRS_PLAN_DB", Path.cwd())
         overrides.append("GRS_PLAN_DB")
+    if "GRS_DOCS_DB" in env:
+        docs_db = _as_path(env["GRS_DOCS_DB"], "GRS_DOCS_DB", Path.cwd())
+        overrides.append("GRS_DOCS_DB")
     if "GRS_OPEN_BROWSER" in env:
         open_browser = _as_bool(env["GRS_OPEN_BROWSER"], "GRS_OPEN_BROWSER")
         overrides.append("GRS_OPEN_BROWSER")
@@ -184,14 +191,17 @@ def load_config(
         debug = _as_bool(env["GRS_DEBUG"], "GRS_DEBUG")
         overrides.append("GRS_DEBUG")
 
-    if records_db == plans_db:
-        raise ConfigError("records_db and plans_db must be different files")
+    if len({records_db, plans_db, docs_db}) != 3:
+        raise ConfigError(
+            "records_db, plans_db and docs_db must be three different files"
+        )
 
     return AppConfig(
         host=host,
         port=port,
         records_db=records_db,
         plans_db=plans_db,
+        docs_db=docs_db,
         open_browser=open_browser,
         debug=debug,
         source=source,

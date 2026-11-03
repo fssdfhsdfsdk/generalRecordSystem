@@ -31,6 +31,7 @@ class ConfigTestCase(unittest.TestCase):
                 "port": 9100,
                 "records_db": "db/records.db",
                 "plans_db": "db/plans.db",
+                "docs_db": "db/docs.db",
                 "open_browser": False,
                 "debug": True,
             }
@@ -40,6 +41,7 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEqual(cfg.port, 9100)
         self.assertEqual(cfg.records_db, (self.temp_dir / "db/records.db").resolve())
         self.assertEqual(cfg.plans_db, (self.temp_dir / "db/plans.db").resolve())
+        self.assertEqual(cfg.docs_db, (self.temp_dir / "db/docs.db").resolve())
         self.assertFalse(cfg.open_browser)
         self.assertTrue(cfg.debug)
         self.assertEqual(cfg.source, self.config_path.resolve())
@@ -50,6 +52,7 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEqual(cfg.port, 9200)
         self.assertEqual(cfg.records_db, (self.temp_dir / "data/records.db").resolve())
         self.assertEqual(cfg.plans_db, (self.temp_dir / "data/plans.db").resolve())
+        self.assertEqual(cfg.docs_db, (self.temp_dir / "data/docs.db").resolve())
         self.assertTrue(cfg.open_browser)
 
     def test_environment_overrides_file(self):
@@ -59,12 +62,14 @@ class ConfigTestCase(unittest.TestCase):
                 "port": 9100,
                 "records_db": "data/records.db",
                 "plans_db": "data/plans.db",
+                "docs_db": "data/docs.db",
                 "open_browser": True,
                 "debug": False,
             }
         )
         records = (self.temp_dir / "env-records.db").resolve()
         plans = (self.temp_dir / "env-plans.db").resolve()
+        docs = (self.temp_dir / "env-docs.db").resolve()
         cfg = load_config(
             self.config_path,
             env={
@@ -72,6 +77,7 @@ class ConfigTestCase(unittest.TestCase):
                 "GRS_PORT": "9101",
                 "GRS_DB": f'"{records}"',
                 "GRS_PLAN_DB": str(plans),
+                "GRS_DOCS_DB": str(docs),
                 "GRS_OPEN_BROWSER": "0",
                 "GRS_DEBUG": "yes",
             },
@@ -80,10 +86,12 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEqual(cfg.port, 9101)
         self.assertEqual(cfg.records_db, records)
         self.assertEqual(cfg.plans_db, plans)
+        self.assertEqual(cfg.docs_db, docs)
         self.assertFalse(cfg.open_browser)
         self.assertTrue(cfg.debug)
         self.assertIn("GRS_PORT", cfg.overrides)
         self.assertIn("GRS_DB", cfg.overrides)
+        self.assertIn("GRS_DOCS_DB", cfg.overrides)
 
     def test_missing_default_config_uses_builtin_defaults(self):
         cfg = load_config(root=self.temp_dir, env={})
@@ -92,6 +100,7 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEqual(cfg.port, 8765)
         self.assertEqual(cfg.records_db, (self.temp_dir / "data/records.db").resolve())
         self.assertEqual(cfg.plans_db, (self.temp_dir / "data/plans.db").resolve())
+        self.assertEqual(cfg.docs_db, (self.temp_dir / "data/docs.db").resolve())
         self.assertTrue(cfg.open_browser)
         self.assertFalse(cfg.debug)
 
@@ -104,6 +113,8 @@ class ConfigTestCase(unittest.TestCase):
             {"debug": 1},
             {"unknown_key": True},
             {"records_db": "data/same.db", "plans_db": "data/same.db"},
+            {"records_db": "data/same.db", "docs_db": "data/same.db"},
+            {"plans_db": "data/same.db", "docs_db": "data/same.db"},
         ]
         for data in bad_values:
             self.write_config(data)
@@ -133,6 +144,7 @@ class ConfigTestCase(unittest.TestCase):
         for env in (
             {"GRS_PORT": "abc"},
             {"GRS_PORT": "0"},
+            {"GRS_DOCS_DB": ""},
             {"GRS_OPEN_BROWSER": "maybe"},
             {"GRS_DEBUG": "2"},
         ):

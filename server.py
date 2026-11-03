@@ -9,8 +9,9 @@ Subsystems are isolated in both code and storage:
 
 * general records -> backend.records -> data/records.db
 * plan management -> backend.plans   -> data/plans.db
+* books & documents -> backend.docs  -> data/docs.db
 
-The two SQLite files never share tables, tags or foreign keys.
+The three SQLite files never share tables, tags or foreign keys.
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from backend.common import (  # noqa: F401 - compatibility re-exports
     APP_VERSION,
     DEFAULT_DB,
+    DEFAULT_DOC_DB,
     DEFAULT_PLAN_DB,
     DIST_DIR,
     MAX_BODY_BYTES,
@@ -41,6 +43,7 @@ from backend.common import (  # noqa: F401 - compatibility re-exports
     db_session,
 )
 from backend.config import ConfigError, load_config
+from backend.docs import store as docs_store
 from backend.plans import store as plans_store
 from backend.records import store as records_store
 
@@ -52,6 +55,7 @@ class Handler(BaseHTTPRequestHandler):
     server_version = f"GeneralRecordSystem/{APP_VERSION}"
     db_path: Path = DEFAULT_DB
     plan_db_path: Path = DEFAULT_PLAN_DB
+    docs_db_path: Path = DEFAULT_DOC_DB
     debug: bool = False
     protocol_version = "HTTP/1.1"
 
@@ -157,7 +161,7 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "status": "ok",
                     "version": APP_VERSION,
-                    "databases": ["records.db", "plans.db"],
+                    "databases": ["records.db", "plans.db", "docs.db"],
                 }
             )
             return
@@ -167,7 +171,15 @@ class Handler(BaseHTTPRequestHandler):
                 record_stats = records_store.get_stats(conn)
             with db_session(self.plan_db_path) as conn:
                 plan_stats = plans_store.get_plan_stats(conn)
-            self._send_json({"records": record_stats, "plans": plan_stats})
+            with db_session(self.docs_db_path) as conn:
+                doc_stats = docs_store.get_doc_stats(conn)
+            self._send_json(
+                {
+                    "records": record_stats,
+                    "plans": plan_stats,
+                    "docs": doc_stats,
+                }
+            )
             return
 
         if path == "/api/stats" and method == "GET":
@@ -253,6 +265,133 @@ class Handler(BaseHTTPRequestHandler):
                 with db_session(self.db_path) as conn:
                     deleted = records_store.cleanup_orphan_tags(conn)
                 self._send_json({"deleted": deleted})
+                return
+
+        # -- books & documents ------------------------------------------------
+        if path == "/api/docs/stats" and method == "GET":
+            with db_session(self.docs_db_path) as conn:
+                self._send_json(docs_store.get_doc_stats(conn))
+            return
+
+        if path == "/api/docs/types":
+            if method == "GET":
+                with db_session(self.docs_db_path) as conn:
+                    types = docs_store.list_doc_types(conn)
+                self._send_json({"types": types, "total": len(types)})
+                return
+            if method == "POST":
+                payload = self._read_json()
+                with db_session(self.docs_db_path) as conn:
+                    result = docs_store.create_doc_type(conn, payload)
+                self._send_json(result, 201)
+                return
+
+        match = re.fullmatch(r"/api/docs/types/(\d+)", path)
+        if match:
+            type_id = int(match.group(1))
+            if method == "GET":
+                with db_session(self.docs_db_path) as conn:
+                    self._send_json(docs_store.fetch_doc_type(conn, type_id))
+                return
+            if method == "PUT":
+                payload = self._read_json()
+                with db_session(self.docs_db_path) as conn:
+                    result = docs_store.update_doc_type(conn, type_id, payload)
+                self._send_json(result)
+                return
+            if method == "DELETE":
+                with db_session(self.docs_db_path) as conn:
+                    docs_store.delete_doc_type(conn, type_id)
+                self._send_json({"deleted": True, "id": type_id})
+                return
+
+        if path == "/api/docs/tags" and method == "GET":
+            with db_session(self.docs_db_path) as conn:
+                tags = docs_store.list_doc_tags(
+                    conn, q.get("sort", "count"), q.get("q", "")
+                )
+            self._send_json({"tags": tags, "total": len(tags)})
+            return
+
+        if path == "/api/docs/tags/orphans" and method == "DELETE":
+            with db_session(self.docs_db_path) as conn:
+                deleted = docs_store.cleanup_orphan_doc_tags(conn)
+            self._send_json({"deleted": deleted})
+            return
+
+        match = re.fullmatch(r"/api/docs/tags/(\d+)", path)
+        if match:
+            tag_id = int(match.group(1))
+            if method == "PUT":
+                payload = self._read_json()
+                with db_session(self.docs_db_path) as conn:
+                    result = docs_store.rename_doc_tag(conn, tag_id, payload)
+                self._send_json(result)
+                return
+            if method == "DELETE":
+                with db_session(self.docs_db_path) as conn:
+                    docs_store.delete_doc_tag(conn, tag_id)
+                self._send_json({"deleted": True, "id": tag_id})
+                return
+
+        if path == "/api/docs":
+            if method == "GET":
+                with db_session(self.docs_db_path) as conn:
+                    documents = docs_store.list_documents(conn, q)
+                self._send_json({"documents": documents, "total": len(documents)})
+                return
+            if method == "POST":
+                payload = self._read_json()
+                with db_session(self.docs_db_path) as conn:
+                    result = docs_store.create_document(conn, payload)
+                self._send_json(result, 201)
+                return
+
+        match = re.fullmatch(r"/api/docs/(\d+)", path)
+        if match:
+            document_id = int(match.group(1))
+            if method == "GET":
+                with db_session(self.docs_db_path) as conn:
+                    self._send_json(docs_store.fetch_document(conn, document_id))
+                return
+            if method == "PUT":
+                payload = self._read_json()
+                with db_session(self.docs_db_path) as conn:
+                    result = docs_store.update_document(conn, document_id, payload)
+                self._send_json(result)
+                return
+            if method == "DELETE":
+                with db_session(self.docs_db_path) as conn:
+                    docs_store.delete_document(conn, document_id)
+                self._send_json({"deleted": True, "id": document_id})
+                return
+
+        match = re.fullmatch(r"/api/docs/(\d+)/history", path)
+        if match and method == "POST":
+            document_id = int(match.group(1))
+            payload = self._read_json()
+            with db_session(self.docs_db_path) as conn:
+                result = docs_store.create_history(conn, document_id, payload)
+            self._send_json(result, 201)
+            return
+
+        match = re.fullmatch(r"/api/docs/(\d+)/history/(\d+)", path)
+        if match:
+            document_id, history_id = int(match.group(1)), int(match.group(2))
+            if method == "PUT":
+                payload = self._read_json()
+                with db_session(self.docs_db_path) as conn:
+                    result = docs_store.update_history(
+                        conn, document_id, history_id, payload
+                    )
+                self._send_json(result)
+                return
+            if method == "DELETE":
+                with db_session(self.docs_db_path) as conn:
+                    result = docs_store.delete_history(
+                        conn, document_id, history_id
+                    )
+                self._send_json(result)
                 return
 
         # -- plan management -------------------------------------------------
@@ -447,12 +586,18 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(data)
 
 
-def make_handler(db_path: Path, plan_db_path: Path, debug: bool = False):
+def make_handler(
+    db_path: Path,
+    plan_db_path: Path,
+    docs_db_path: Path = DEFAULT_DOC_DB,
+    debug: bool = False,
+):
     class BoundHandler(Handler):
         pass
 
     BoundHandler.db_path = Path(db_path)
     BoundHandler.plan_db_path = Path(plan_db_path)
+    BoundHandler.docs_db_path = Path(docs_db_path)
     BoundHandler.debug = debug
     return BoundHandler
 
@@ -480,17 +625,25 @@ def create_server(
     db_path: Path,
     debug: bool = False,
     plan_db_path: Path | None = None,
+    docs_db_path: Path | None = None,
 ) -> AppHTTPServer:
     db_path = Path(db_path)
     if plan_db_path is None:
         plan_db_path = db_path.parent / "plans.db"
     plan_db_path = Path(plan_db_path)
-    if db_path.resolve() == plan_db_path.resolve():
-        raise ValueError("records.db and plans.db must be different files")
+    if docs_db_path is None:
+        docs_db_path = db_path.parent / "docs.db"
+    docs_db_path = Path(docs_db_path)
+    if len({db_path.resolve(), plan_db_path.resolve(), docs_db_path.resolve()}) != 3:
+        raise ValueError(
+            "records.db, plans.db and docs.db must be three different files"
+        )
     records_store.init_db(db_path)
     plans_store.init_db(plan_db_path)
+    docs_store.init_db(docs_db_path)
     server = AppHTTPServer(
-        (host, port), make_handler(db_path, plan_db_path, debug)
+        (host, port),
+        make_handler(db_path, plan_db_path, docs_db_path, debug),
     )
     return server
 
@@ -513,6 +666,9 @@ def main() -> int:
     parser.add_argument("--db", default=None, help="records SQLite path (default from config)")
     parser.add_argument(
         "--plan-db", default=None, help="plans SQLite path (default from config)"
+    )
+    parser.add_argument(
+        "--docs-db", default=None, help="docs SQLite path (default from config)"
     )
     open_group = parser.add_mutually_exclusive_group()
     open_group.add_argument(
@@ -570,8 +726,15 @@ def main() -> int:
         if args.plan_db is not None
         else cfg.plans_db
     )
-    if db_path == plan_db_path:
-        print("[ERROR] records and plans must use different database files.")
+    docs_db_path = (
+        Path(args.docs_db).expanduser().resolve()
+        if args.docs_db is not None
+        else cfg.docs_db
+    )
+    if len({db_path, plan_db_path, docs_db_path}) != 3:
+        print(
+            "[ERROR] records, plans and docs must use three different database files."
+        )
         return 1
 
     open_browser = (
@@ -587,6 +750,7 @@ def main() -> int:
             ("--port", args.port),
             ("--db", args.db),
             ("--plan-db", args.plan_db),
+            ("--docs-db", args.docs_db),
             ("--open/--no-open", args.open_browser),
             ("--debug", args.debug),
         )
@@ -595,7 +759,9 @@ def main() -> int:
     overrides = list(cfg.overrides) + cli_overrides
 
     try:
-        httpd = create_server(host, port, db_path, debug, plan_db_path)
+        httpd = create_server(
+            host, port, db_path, debug, plan_db_path, docs_db_path
+        )
     except ValueError as exc:
         print(f"[ERROR] Invalid database configuration: {exc}")
         return 1
@@ -617,6 +783,7 @@ def main() -> int:
     print(f"  URL      : {url}")
     print(f"  Records  : {db_path}")
     print(f"  Plans    : {plan_db_path}")
+    print(f"  Docs     : {docs_db_path}")
     print(f"  Browser  : {'open' if open_browser else 'manual'}")
     print("  Stop     : Ctrl+C")
     print("=" * 58)

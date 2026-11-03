@@ -58,7 +58,7 @@ if not exist "dist\index.html" (
 )
 
 echo [INFO] Starting with config.json
-echo [INFO] Optional env overrides: GRS_HOST, GRS_PORT, GRS_DB, GRS_PLAN_DB, GRS_OPEN_BROWSER
+echo [INFO] Optional env overrides: GRS_HOST, GRS_PORT, GRS_DB, GRS_PLAN_DB, GRS_DOCS_DB, GRS_OPEN_BROWSER, GRS_DEBUG
 echo [INFO] Press Ctrl+C to stop the server.
 echo.
 
@@ -71,6 +71,7 @@ if errorlevel 1 (
   echo             set GRS_PORT=8790
   echo             set GRS_DB=D:\data\my-records.db
   echo             set GRS_PLAN_DB=D:\data\my-plans.db
+  echo             set GRS_DOCS_DB=D:\data\my-docs.db
   echo.
   pause
 )

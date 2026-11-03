@@ -1,6 +1,6 @@
 # 开发缺陷记录（bug-tracks.md）
 
-本文档记录“拾录 · 记录与计划工作台”v1.0、v1.1、v1.2 与 v1.3 开发过程中实际遇到并修复的缺陷。格式遵循顾客要求：描述、背景与上下文、分析过程、根因、解决方法、时间。
+本文档记录“拾录 · 记录、计划与阅读工作台”v1.0、v1.1、v1.2、v1.3 与 v1.4 开发过程中实际遇到并修复的缺陷。格式遵循顾客要求：描述、背景与上下文、分析过程、根因、解决方法、时间。
 
 ---
 
@@ -818,6 +818,109 @@ raw = path.read_text(encoding="utf-8-sig")
 
 ---
 
+## BUG-023：文档列表的删除按钮直接执行删除，没有二次确认
+
+**描述：**  
+在 `DocListPage` 的表格操作列点击垃圾桶图标，文档立即被删除，没有 Popconfirm 或 Modal 确认。与浏览内容页、编辑页已有的删除保护不一致。
+
+**背景与上下文：**  
+文档包含阅读笔记、感想、标签关联与阅读历史；删除是级联且不可恢复的。列表页是最容易误点删除的入口。
+
+**分析过程：**
+
+1. 走查 `DocListPage` 操作列，发现删除按钮直接调用 `removeDocument(record)`；
+2. 对照记录列表与计划详情，二者都使用 `Popconfirm`；
+3. 将删除按钮包进 `Popconfirm`，明确提示会一起删除笔记、感想与历史；
+4. 浏览器 E2E 从内容页删除路径验证通过；列表页也复用同一后端接口。
+
+**根因：**  
+新页面实现时只关注接口联通，遗漏了列表页的删除确认交互。
+
+**解决方法：**
+
+```jsx
+<Popconfirm
+  title="删除这篇文档？"
+  description="阅读笔记、感想与历史会一起删除，且不可恢复。"
+  okText="删除"
+  cancelText="取消"
+  okButtonProps={{ danger: true }}
+  onConfirm={() => removeDocument(record)}
+>
+  <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+</Popconfirm>
+```
+
+**时间：** 2026-11-03 22:18–22:22 +08:00
+
+---
+
+## BUG-024：文档总览“待继续”把未阅读文档误计入进行中
+
+**描述：**  
+文档总览的“正在读”区块右上角显示“6 篇待继续”，但实际只有 3 篇状态为进行中，另外 3 篇是未阅读。用户会误以为有 6 篇已经在读。
+
+**背景与上下文：**  
+`DocsOverviewPage` 最初用 `reading + unread` 计算 `active`，而“正在读”列表只查询 `reading_status = reading`。数字与列表语义不一致。
+
+**分析过程：**
+
+1. 对照 `/api/docs/stats` 的 `by_status` 与 `reading_now` 列表；
+2. 确认 `active` 把未阅读也算进去，但区块标题是“正在读”；
+3. 改为明确展示“3 篇进行中 · 3 篇未读”，不再使用单一模糊总数；
+4. 移动端截图复查，文案不再产生歧义。
+
+**根因：**  
+把“未完成”等同于“正在读”，忽略了阅读状态的三态语义。
+
+**解决方法：**
+
+```jsx
+<span className="muted-text">
+  {stats.by_status?.reading || 0} 篇进行中 ·{' '}
+  {stats.by_status?.unread || 0} 篇未读
+</span>
+```
+
+**时间：** 2026-11-03 22:26–22:29 +08:00
+
+---
+
+## BUG-025：全页截图丢失固定侧边栏，导致验收误判
+
+**描述：**  
+使用 CDP `Page.captureScreenshot({ captureBeyondViewport: true })` 截取文档长页面时，部分截图中的深色侧边栏完全消失，或菜单只剩图标。DOM 检查显示 Sider 宽度 252px、菜单文本完整，实际页面没有布局故障。
+
+**背景与上下文：**  
+验收脚本需要在 1440px 与 390px 下截取长页面。截图使用 `captureBeyondViewport` 让浏览器临时扩展渲染区域，`position: sticky` 的 Sider 在扩展区域中偶发不稳定。
+
+**分析过程：**
+
+1. 用 CDP 读取 `.app-sider` 的 `getBoundingClientRect()`、`className` 与菜单 `innerText`，确认侧边栏实际存在；
+2. 对比正常视口截图与 `captureBeyondViewport` 截图，问题只在后者复现；
+3. 改为先把视口 height 设为页面 `scrollHeight`，再用 `captureBeyondViewport: false` 截图；
+4. 每张截图前先把视口重置为 900px（移动端 844px）再测量，避免上一张高度污染下一张；
+5. 重新截取 12 张桌面/移动截图，侧边栏宽度均为 252px（移动端为 1px 隐藏态）。
+
+**根因：**  
+验收脚本使用了不稳定的全页截屏方式，不是产品 CSS 缺陷。
+
+**解决方法：**
+
+```js
+await viewport(width, 900, mobile)
+const height = await evaluate('document.documentElement.scrollHeight')
+await viewport(width, height + 4, mobile)
+await send('Page.captureScreenshot', {
+  format: 'png',
+  captureBeyondViewport: false,
+})
+```
+
+**时间：** 2026-11-03 22:29–22:33 +08:00
+
+---
+
 ## 附：验证方式
 
 | 缺陷 | 验证 |
@@ -844,5 +947,8 @@ raw = path.read_text(encoding="utf-8-sig")
 | BUG-020 | 920px 详情与列表时间线截图，无日期割裂 |
 | BUG-021 | `start.bat` + `GRS_PORT=8787` 启动，配置/环境优先级验证 |
 | BUG-022 | UTF-8 BOM 配置启动成功；`test_utf8_bom_config_is_accepted` 通过 |
+| BUG-023 | 文档列表 Popconfirm DOM 检查 + 删除流程 E2E |
+| BUG-024 | 文档总览桌面/移动截图，进行中/未读文案分离 |
+| BUG-025 | CDP 读取 Sider 尺寸 + 全页截图复查，12 张截图侧边栏正常 |
 
-上述缺陷修复后，最终回归结果：**43 个后端测试通过，浏览器 E2E（v1.2 功能基线）的 11 项断言保持通过，生产构建成功，干净 Edge / 生产 CSP 下 console error 为 0**。
+上述缺陷修复后，最终回归结果：**57 个后端测试通过（记录 17 + 计划 18 + 文档 14 + 配置 8），文档 E2E 8 项断言通过，应用 console error 为 0，生产构建成功；v1.2 计划/记录浏览器断言保持通过**。

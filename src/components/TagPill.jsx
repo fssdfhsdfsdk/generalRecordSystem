@@ -35,6 +35,7 @@ export default function TagPill({
       <button
         type="button"
         className={classes}
+        title={name}
         onClick={(event) => {
           event.stopPropagation()
           onClick(name)
@@ -44,5 +45,9 @@ export default function TagPill({
       </button>
     )
   }
-  return <span className={classes}>{content}</span>
+  return (
+    <span className={classes} title={name}>
+      {content}
+    </span>
+  )
 }

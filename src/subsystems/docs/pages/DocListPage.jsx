@@ -1,0 +1,454 @@
+import React, { useEffect, useMemo, useState } from 'react'
+import {
+  App as AntApp,
+  Button,
+  Input,
+  Popconfirm,
+  Progress,
+  Result,
+  Select,
+  Space,
+  Table,
+  Tooltip,
+} from 'antd'
+import {
+  BookOutlined,
+  ClearOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  FilterOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+  SettingOutlined,
+  TagsOutlined,
+} from '@ant-design/icons'
+import { docApi } from '../api'
+import { navigate } from '../../../router'
+import { formatShortDate } from '../../../utils'
+import { useAppData } from '../../../shell/AppDataContext'
+import PageHeader from '../../../components/PageHeader'
+import EmptyState from '../../../components/EmptyState'
+import EllipsisText from '../../../components/EllipsisText'
+import TitleText from '../../../components/TitleText'
+import DocTypeIcon from '../components/DocTypeIcon'
+import DocStatusTag from '../components/DocStatusTag'
+import DocPriorityTag from '../components/DocPriorityTag'
+import DocTagLine from '../components/DocTagLine'
+import {
+  DOC_PRIORITY_OPTIONS,
+  DOC_STATUS_OPTIONS,
+  docTypeMeta,
+} from '../docsMeta'
+
+const SORT_OPTIONS = [
+  { value: 'updated_desc', label: '最近更新' },
+  { value: 'created_desc', label: '最近创建' },
+  { value: 'priority_desc', label: '优先级（高→低）' },
+  { value: 'progress_desc', label: '阅读进度（高→低）' },
+  { value: 'title_asc', label: '名称 A-Z' },
+]
+
+export default function DocListPage({ typeId }) {
+  const { message } = AntApp.useApp()
+  const { docTypes, docTypesLoading } = useAppData()
+  const type = useMemo(
+    () => docTypes.find((item) => String(item.id) === String(typeId)),
+    [docTypes, typeId],
+  )
+  const [documents, setDocuments] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [q, setQ] = useState('')
+  const [statuses, setStatuses] = useState([])
+  const [priorities, setPriorities] = useState([])
+  const [tags, setTags] = useState([])
+  const [tagOptions, setTagOptions] = useState([])
+  const [sort, setSort] = useState('updated_desc')
+  const [reloadToken, setReloadToken] = useState(0)
+
+  useEffect(() => {
+    setQ('')
+    setStatuses([])
+    setPriorities([])
+    setTags([])
+    setSort('updated_desc')
+  }, [typeId])
+
+  useEffect(() => {
+    docApi
+      .listTags({ sort: 'count' })
+      .then((data) => setTagOptions(data.tags))
+      .catch(() => setTagOptions([]))
+  }, [reloadToken])
+
+  useEffect(() => {
+    let alive = true
+    const timer = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const data = await docApi.list({
+          type_id: typeId,
+          q,
+          status: statuses.join(','),
+          priority: priorities.join(','),
+          tags: tags.join(','),
+          sort,
+          limit: 500,
+        })
+        if (alive) setDocuments(data.documents)
+      } catch (error) {
+        if (alive) {
+          message.error(error.message)
+          setDocuments([])
+        }
+      } finally {
+        if (alive) setLoading(false)
+      }
+    }, 220)
+    return () => {
+      alive = false
+      clearTimeout(timer)
+    }
+  }, [typeId, q, statuses, priorities, tags, sort, reloadToken, message])
+
+  const resetFilters = () => {
+    setQ('')
+    setStatuses([])
+    setPriorities([])
+    setTags([])
+    setSort('updated_desc')
+  }
+
+  const filterCount =
+    (q ? 1 : 0) +
+    (statuses.length ? 1 : 0) +
+    (priorities.length ? 1 : 0) +
+    (tags.length ? 1 : 0) +
+    (sort !== 'updated_desc' ? 1 : 0)
+
+  const removeDocument = async (document) => {
+    try {
+      await docApi.remove(document.id)
+      message.success('文档已删除')
+      setReloadToken((token) => token + 1)
+    } catch (error) {
+      message.error(error.message)
+    }
+  }
+
+  const columns = [
+    {
+      title: '文档',
+      dataIndex: 'title',
+      key: 'title',
+      width: 270,
+      render: (_, record) => (
+        <button
+          type="button"
+          className="doc-title-cell"
+          onClick={() => navigate(`/docs/${record.id}`)}
+        >
+          <span className="doc-title-line">
+            <TitleText text={record.title} maxChars={48} />
+          </span>
+          <span className="doc-title-meta">
+            {formatShortDate(record.updated_at)}
+            {record.history_count ? ` · ${record.history_count} 次阅读` : ''}
+          </span>
+          <span className="doc-title-mobile-meta">
+            <DocStatusTag status={record.reading_status} size="small" />
+            <DocPriorityTag priority={record.priority} />
+            <span>{record.reading_progress}%</span>
+          </span>
+        </button>
+      ),
+    },
+    {
+      title: '文档信息',
+      dataIndex: 'document_info',
+      key: 'document_info',
+      width: 220,
+      responsive: ['lg'],
+      render: (value) => <EllipsisText text={value} maxChars={36} />,
+    },
+    {
+      title: '标签',
+      dataIndex: 'tags',
+      key: 'tags',
+      width: 160,
+      responsive: ['xl'],
+      render: (value) => <DocTagLine tags={value} max={2} />,
+    },
+    {
+      title: '状态',
+      dataIndex: 'reading_status',
+      key: 'reading_status',
+      width: 92,
+      render: (value) => <DocStatusTag status={value} size="small" />,
+    },
+    {
+      title: '阅读进度',
+      dataIndex: 'reading_progress',
+      key: 'reading_progress',
+      width: 118,
+      render: (value) => (
+        <div className="doc-progress-cell">
+          <Progress
+            percent={value}
+            size="small"
+            showInfo={false}
+            strokeColor="#f59e0b"
+          />
+          <span>{value}%</span>
+        </div>
+      ),
+    },
+    {
+      title: '优先级',
+      dataIndex: 'priority',
+      key: 'priority',
+      width: 76,
+      responsive: ['md'],
+      render: (value) => <DocPriorityTag priority={value} />,
+    },
+    {
+      title: '',
+      key: 'actions',
+      width: 88,
+      render: (_, record) => (
+        <Space size={2}>
+          <Tooltip title="浏览内容">
+            <Button
+              type="text"
+              size="small"
+              icon={<EyeOutlined />}
+              aria-label={`浏览文档 ${record.title}`}
+              onClick={() => navigate(`/docs/${record.id}`)}
+            />
+          </Tooltip>
+          <Tooltip title="编辑">
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              aria-label={`编辑文档 ${record.title}`}
+              onClick={() => navigate(`/docs/${record.id}/edit`)}
+            />
+          </Tooltip>
+          <Popconfirm
+            title="删除这篇文档？"
+            description="阅读笔记、感想与历史会一起删除，且不可恢复。"
+            okText="删除"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+            onConfirm={() => removeDocument(record)}
+          >
+            <Button
+              type="text"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              aria-label={`删除文档 ${record.title}`}
+            />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ]
+
+  if (!docTypesLoading && !type) {
+    return (
+      <div className="page">
+        <Result
+          status="404"
+          title="文档类型不存在"
+          subTitle="它可能已经被删除，或者地址有误。"
+          extra={
+            <Space>
+              <Button onClick={() => navigate('/docs')}>回到文档总览</Button>
+              <Button type="primary" onClick={() => navigate('/docs/types')}>
+                前往类型管理
+              </Button>
+            </Space>
+          }
+        />
+      </div>
+    )
+  }
+
+  if (!type) {
+    return (
+      <div className="page">
+        <div className="page-loading">
+          <span className="loading-bar" />
+        </div>
+      </div>
+    )
+  }
+
+  const typeMeta = docTypeMeta(type)
+
+  return (
+    <div className="page doc-list-page">
+      <PageHeader
+        eyebrow="DOCUMENT TYPE"
+        title={
+          <span className="title-with-icon">
+            <DocTypeIcon type={type} size="lg" />
+            {type.name}
+          </span>
+        }
+        description={`${type.count || type.document_count || 0} 篇文档。${type.description || '这一类文档会独立归档。'}`}
+        extra={
+          <Space wrap>
+            <Button icon={<SettingOutlined />} onClick={() => navigate('/docs/types')}>
+              类型管理
+            </Button>
+            <Button icon={<TagsOutlined />} onClick={() => navigate('/docs/tags')}>
+              标签管理
+            </Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => navigate(`/docs/new?type=${type.id}`)}
+            >
+              新建文档
+            </Button>
+          </Space>
+        }
+      >
+        <div className="doc-type-crumb-line">
+          <span className={`doc-type-kicker doc-text-${typeMeta.tone}`}>
+            {typeMeta.kicker}
+          </span>
+          <span className="muted-text">
+            {type.slug ? '默认类型' : '自定义类型'}
+          </span>
+        </div>
+      </PageHeader>
+
+      <div className="doc-filter-card">
+        <div className="doc-filter-head">
+          <div className="doc-filter-title">
+            <FilterOutlined />
+            <span>筛选</span>
+            {filterCount ? <span className="filter-count">{filterCount} 项</span> : null}
+          </div>
+          <Button
+            type="text"
+            size="small"
+            icon={<ClearOutlined />}
+            onClick={resetFilters}
+            disabled={!filterCount}
+          >
+            重置
+          </Button>
+        </div>
+        <div className="doc-filter-grid">
+          <Input
+            allowClear
+            value={q}
+            onChange={(event) => setQ(event.target.value)}
+            prefix={<SearchOutlined className="input-prefix" />}
+            placeholder="搜索名称、文档信息、笔记或感想"
+            className="doc-filter-search"
+          />
+          <Select
+            mode="multiple"
+            allowClear
+            maxTagCount="responsive"
+            value={statuses}
+            onChange={setStatuses}
+            options={DOC_STATUS_OPTIONS}
+            placeholder="阅读状态"
+            className="doc-filter-status"
+          />
+          <Select
+            mode="multiple"
+            allowClear
+            maxTagCount="responsive"
+            value={priorities}
+            onChange={setPriorities}
+            options={DOC_PRIORITY_OPTIONS}
+            placeholder="优先级"
+            className="doc-filter-priority"
+          />
+          <Select
+            mode="multiple"
+            allowClear
+            maxTagCount="responsive"
+            value={tags}
+            onChange={setTags}
+            options={tagOptions.map((tag) => ({
+              value: tag.name,
+              label: `${tag.name} (${tag.count})`,
+            }))}
+            placeholder="标签（AND）"
+            className="doc-filter-tags"
+          />
+          <Select
+            value={sort}
+            onChange={setSort}
+            options={SORT_OPTIONS}
+            className="doc-filter-sort"
+          />
+          <Tooltip title="刷新">
+            <Button
+              icon={<ReloadOutlined spin={loading} />}
+              onClick={() => setReloadToken((token) => token + 1)}
+            />
+          </Tooltip>
+        </div>
+      </div>
+
+      <div className="doc-list-summary">
+        <span>
+          共 <strong>{documents.length}</strong> 篇文档
+        </span>
+        <span className="muted-text">
+          文档信息在列表中单列展示，超长时省略，悬浮可查看完整内容。
+        </span>
+      </div>
+
+      {!loading && !documents.length ? (
+        <EmptyState
+          icon={<BookOutlined />}
+          title={filterCount ? '没有匹配的文档' : `「${type.name}」还没有文档`}
+          description={
+            filterCount
+              ? '试试减少筛选条件，或者清空搜索。'
+              : '从一篇具体的书、论文或材料开始，后续可以慢慢补充笔记与感想。'
+          }
+          action={
+            <Space>
+              {filterCount ? <Button onClick={resetFilters}>清空筛选</Button> : null}
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => navigate(`/docs/new?type=${type.id}`)}
+              >
+                新建文档
+              </Button>
+            </Space>
+          }
+        />
+      ) : (
+        <Table
+          className="doc-table"
+          rowKey="id"
+          loading={loading}
+          dataSource={documents}
+          columns={columns}
+          scroll={{ x: 1030 }}
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            pageSizeOptions: [10, 20, 50],
+            showTotal: (total) => `共 ${total} 篇文档`,
+          }}
+        />
+      )}
+    </div>
+  )
+}

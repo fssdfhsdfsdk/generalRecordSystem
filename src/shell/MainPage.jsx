@@ -6,14 +6,13 @@ import {
   CalendarOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
-  FlagOutlined,
   PlusOutlined,
   ProjectOutlined,
-  TagsOutlined,
+  ReadOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons'
 import { api } from '../api'
-import { navigate, tagFilterPath } from '../router'
+import { navigate } from '../router'
 import { formatShortDate } from '../utils'
 import { useAppData } from './AppDataContext'
 import TitleText from '../components/TitleText'
@@ -23,6 +22,9 @@ import TypeIcon from '../subsystems/records/components/TypeIcon'
 import PlanStatusTag from '../subsystems/plans/components/PlanStatusTag'
 import PlanDetailDrawer from '../subsystems/plans/components/PlanDetailDrawer'
 import { formatHours, planTypeMeta } from '../subsystems/plans/planMeta'
+import DocTypeIcon from '../subsystems/docs/components/DocTypeIcon'
+import DocStatusTag from '../subsystems/docs/components/DocStatusTag'
+import { formatDocHours } from '../subsystems/docs/docsMeta'
 
 const EMPTY = {
   records: { records: 0, types: 0, tags: 0, recent: [] },
@@ -34,6 +36,17 @@ const EMPTY = {
     overdue: 0,
     completion_avg: 0,
     recent: [],
+  },
+  docs: {
+    total: 0,
+    by_type: {},
+    by_status: { unread: 0, reading: 0, completed: 0 },
+    tags: 0,
+    avg_progress: 0,
+    history_hours: 0,
+    history_count: 0,
+    recent: [],
+    reading_now: [],
   },
 }
 
@@ -63,6 +76,7 @@ export default function MainPage() {
 
   const records = data.records || EMPTY.records
   const plans = data.plans || EMPTY.plans
+  const docs = data.docs || EMPTY.docs
   const activePlans =
     (plans.by_status?.in_progress || 0) +
     (plans.by_status?.overdue || 0) +
@@ -75,16 +89,17 @@ export default function MainPage() {
         <div className="main-hero-glow main-hero-glow-b" />
         <div className="main-hero-copy">
           <span className="hero-kicker">
-            <ThunderboltOutlined /> 本地工作台 · 双库隔离 · 一个入口
+            <ThunderboltOutlined /> 本地工作台 · 三库隔离 · 一个入口
           </span>
           <h1>
             把记录收好，
             <br />
-            把计划推进。
+            把计划推进，把书读透。
           </h1>
           <p>
-            通用记录负责保存事实、问答与根因；计划管理负责把目标拆成节点、记录实际时间与进度变化。
-            两个子系统各自拥有独立的数据文件，互不干扰。
+            通用记录保存事实、问答与根因；计划管理拆解目标、记录时间与进度；
+            书籍与文档管理收拢书、论文、文章、规范与办公材料，留住笔记、感想和阅读历史。
+            三个子系统各自拥有独立的数据文件，互不干扰。
           </p>
           <div className="main-hero-actions">
             <Button
@@ -102,6 +117,14 @@ export default function MainPage() {
               onClick={() => navigate('/plans')}
             >
               进入计划管理
+            </Button>
+            <Button
+              size="large"
+              className="hero-ghost-button hero-ghost-docs"
+              icon={<ReadOutlined />}
+              onClick={() => navigate('/docs')}
+            >
+              进入书籍与文档
             </Button>
           </div>
         </div>
@@ -127,6 +150,11 @@ export default function MainPage() {
                   <span>计划</span>
                   <strong>{plans.total}</strong>
                   <small>{activePlans} 个在推进</small>
+                </div>
+                <div className="main-pulse-item">
+                  <span>文档</span>
+                  <strong>{docs.total}</strong>
+                  <small>{docs.by_status?.reading || 0} 篇阅读中</small>
                 </div>
                 <div className="main-pulse-item">
                   <span>完成度</span>
@@ -214,6 +242,42 @@ export default function MainPage() {
             <span>进度历史</span>
           </div>
         </button>
+
+        <button
+          type="button"
+          className="subsystem-card subsystem-docs"
+          onClick={() => navigate('/docs')}
+        >
+          <div className="subsystem-card-top">
+            <span className="subsystem-icon">
+              <ReadOutlined />
+            </span>
+            <span className="subsystem-arrow">
+              <ArrowRightOutlined />
+            </span>
+          </div>
+          <div className="subsystem-kicker">READING LIBRARY</div>
+          <h2>书籍与文档</h2>
+          <p>
+            书籍、论文、文章博客、技术规范与商业材料；阅读笔记、感想、历史、标签和进度一起归档。
+          </p>
+          <div className="subsystem-stats">
+            <span>
+              <strong>{docs.total}</strong> 篇文档
+            </span>
+            <span>
+              <strong>{docs.by_status?.reading || 0}</strong> 篇阅读中
+            </span>
+            <span>
+              <strong>{docs.by_status?.completed || 0}</strong> 篇完成
+            </span>
+          </div>
+          <div className="subsystem-chips">
+            <span>阅读历史</span>
+            <span>独立标签</span>
+            <span>笔记 / 感想</span>
+          </div>
+        </button>
       </section>
 
       <section className="main-stat-strip">
@@ -232,17 +296,17 @@ export default function MainPage() {
           </div>
         </div>
         <div className="main-stat">
-          <CheckCircleOutlined />
+          <ReadOutlined />
           <div>
-            <span>已完成计划</span>
-            <strong>{plans.by_status?.completed || 0}</strong>
+            <span>文档总量</span>
+            <strong>{docs.total}</strong>
           </div>
         </div>
         <div className="main-stat">
-          <FlagOutlined />
+          <CheckCircleOutlined />
           <div>
-            <span>计划标签</span>
-            <strong>{plans.tags}</strong>
+            <span>完成阅读</span>
+            <strong>{docs.by_status?.completed || 0}</strong>
           </div>
         </div>
       </section>
@@ -357,6 +421,67 @@ export default function MainPage() {
                 onClick={() => navigate('/plans/short')}
               >
                 创建计划
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <div className="main-recent-card">
+          <div className="section-heading compact">
+            <div>
+              <div className="eyebrow">RECENT DOCUMENTS</div>
+              <h2>最近文档</h2>
+            </div>
+            <Button type="text" onClick={() => navigate('/docs')}>
+              全部 <ArrowRightOutlined />
+            </Button>
+          </div>
+          {loading ? (
+            <Skeleton active paragraph={{ rows: 3 }} />
+          ) : docs.recent.length ? (
+            <div className="main-recent-list">
+              {docs.recent.map((doc) => (
+                <button
+                  type="button"
+                  className="main-recent-row"
+                  key={doc.id}
+                  onClick={() => navigate(`/docs/${doc.id}`)}
+                >
+                  <DocTypeIcon
+                    type={{ id: doc.type_id, slug: doc.type_slug }}
+                    size="sm"
+                  />
+                  <span className="main-recent-main">
+                    <span className="main-recent-title">
+                      <TitleText text={doc.title} maxChars={38} />
+                    </span>
+                    <span className="main-recent-meta">
+                      {doc.type_name} · {formatDocHours(doc.total_hours)} ·{' '}
+                      {formatShortDate(doc.updated_at)}
+                    </span>
+                  </span>
+                  <span className="main-recent-progress">
+                    <Progress
+                      percent={doc.reading_progress}
+                      size="small"
+                      showInfo={false}
+                      strokeColor="#f59e0b"
+                    />
+                    <span>{doc.reading_progress}%</span>
+                  </span>
+                  <DocStatusTag status={doc.reading_status} size="small" />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="main-empty">
+              <p>还没有文档。</p>
+              <Button
+                size="small"
+                icon={<PlusOutlined />}
+                onClick={() => navigate('/docs')}
+              >
+                添加第一篇
               </Button>
             </div>
           )}

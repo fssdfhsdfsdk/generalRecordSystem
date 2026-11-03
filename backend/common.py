@@ -13,6 +13,7 @@ DIST_DIR = ROOT / "dist"
 DATA_DIR = ROOT / "data"
 DEFAULT_DB = DATA_DIR / "records.db"
 DEFAULT_PLAN_DB = DATA_DIR / "plans.db"
+DEFAULT_DOC_DB = DATA_DIR / "docs.db"
 
 MAX_BODY_BYTES = 4 * 1024 * 1024
 MAX_TITLE = 255
@@ -22,7 +23,7 @@ MAX_FIELDS = 30
 MAX_TAGS = 30
 MAX_LOG_TEXT = 10_000
 MAX_REASON = 1_000
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.4.0"
 
 _C = "\x00-\x08\x0b\x0c\x0e-\x1f"
 _CONTROL_CHARS = re.compile(rf"[{_C}]")
