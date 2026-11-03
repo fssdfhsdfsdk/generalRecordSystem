@@ -110,7 +110,11 @@ export default function DocEditPage({ documentId, defaultTypeId }) {
     form.setFieldsValue({
       title: doc?.title || '',
       type_id: fallbackType ? Number(fallbackType) : undefined,
-      document_info: doc?.document_info || '',
+      author: doc?.author || '',
+      doc_time: doc?.doc_time || '',
+      version: doc?.version || '',
+      resource_url: doc?.resource_url || '',
+      info_extra: doc?.info_extra || '',
       reading_status: doc?.reading_status || 'unread',
       reading_progress: doc?.reading_progress ?? 0,
       priority: doc?.priority ?? 3,
@@ -135,7 +139,11 @@ export default function DocEditPage({ documentId, defaultTypeId }) {
     const payload = {
       type_id: values.type_id,
       title: values.title,
-      document_info: values.document_info || '',
+      author: values.author || '',
+      doc_time: values.doc_time || '',
+      version: values.version || '',
+      resource_url: values.resource_url || '',
+      info_extra: values.info_extra || '',
       reading_status: values.reading_status || 'unread',
       reading_progress: values.reading_progress ?? 0,
       priority: values.priority ?? 3,
@@ -332,17 +340,62 @@ export default function DocEditPage({ documentId, defaultTypeId }) {
             <ProgressInput />
           </Form.Item>
 
-          <Form.Item
-            name="document_info"
-            label="文档信息"
-            extra="作者、时间、版本、资源地址等放在同一列；列表中超长会显示 ...，悬浮可查看完整内容。"
-            rules={[{ max: 1000, message: '文档信息不能超过 1000 个字符' }]}
-          >
-            <Input
-              maxLength={1000}
-              placeholder="例如：作者 / 出版时间 / 版本 / https://example.com/resource"
-            />
-          </Form.Item>
+          <div className="doc-info-form-section">
+            <div className="doc-info-form-heading">
+              <span>文档信息</span>
+              <span className="muted-text">
+                分别保存，可分别筛选；列表合并为一个「文档信息」列
+              </span>
+            </div>
+            <div className="form-grid-2">
+              <Form.Item
+                name="author"
+                label="作者"
+                rules={[{ max: 1000, message: '作者不能超过 1000 个字符' }]}
+              >
+                <Input maxLength={1000} placeholder="例如：Randal E. Bryant" />
+              </Form.Item>
+              <Form.Item
+                name="doc_time"
+                label="时间"
+                rules={[{ max: 1000, message: '时间不能超过 1000 个字符' }]}
+              >
+                <Input
+                  maxLength={1000}
+                  placeholder="例如：2016-08 / 2026-10-30 / 第三季度"
+                />
+              </Form.Item>
+            </div>
+            <div className="form-grid-2">
+              <Form.Item
+                name="version"
+                label="版本"
+                rules={[{ max: 1000, message: '版本不能超过 1000 个字符' }]}
+              >
+                <Input maxLength={1000} placeholder="例如：第 3 版 / v0.9" />
+              </Form.Item>
+              <Form.Item
+                name="resource_url"
+                label="资源地址"
+                rules={[{ max: 1000, message: '资源地址不能超过 1000 个字符' }]}
+              >
+                <Input
+                  maxLength={1000}
+                  placeholder="例如：https://example.com/resource"
+                />
+              </Form.Item>
+            </div>
+            <Form.Item
+              name="info_extra"
+              label="其它信息"
+              rules={[{ max: 1000, message: '其它信息不能超过 1000 个字符' }]}
+            >
+              <Input
+                maxLength={1000}
+                placeholder="例如：课程配套材料 / 收藏于某处 / 备注"
+              />
+            </Form.Item>
+          </div>
 
           <Form.Item name="tags" label="文档标签">
             <TagSelect placeholder="输入标签，按回车确认（文档独立词库）" />

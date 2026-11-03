@@ -921,6 +921,92 @@ await send('Page.captureScreenshot', {
 
 ---
 
+## BUG-026：中等宽度下文档筛选栏溢出白色卡片，排序“最近更新”被挤出
+
+**描述：**  
+在文档类型页缩窄窗口后，筛选栏最后一列排序下拉（默认“最近更新”）会超出白色筛选卡片的右边界，部分内容被裁掉；同时筛选栏内部出现横向溢出。
+
+**背景与上下文：**  
+`DocListPage` 的筛选区原先使用固定 6 列 CSS Grid，并为搜索、状态、优先级、标签、排序分别设置最小列宽。宽屏下勉强容纳，但在 992–1200px 区间，侧边栏仍占 252px，内容区实际可用宽度变小，所有列的最小宽度之和超过卡片宽度。排序列位于最后一列，因此最先被挤出。
+
+**分析过程：**
+
+1. 在 1440px 下筛选栏正常；缩到约 1024–1200px 后复现；
+2. 计算 Grid 最小列宽与 gap 之和，确认大于筛选卡片内容宽度；
+3. 排序项还带有 `min-width: 150px`，进一步阻止收缩；
+4. 先尝试调整 5 列断点，但在更窄宽度仍会溢出；
+5. 改为 `display: flex; flex-wrap: wrap`，搜索默认占 230px、其余控件按内容最小宽度换行，排序限制最大宽度，刷新按钮固定 42px；
+6. 在 1440、1200、1024、390px 下检查，筛选控件都留在白色卡片内部。
+
+**根因：**  
+固定列数的 Grid 在侧边栏 + 内容区变化时缺少自适应换行能力；最后一列没有可用收缩空间，造成卡片内 overflow。
+
+**解决方法：**
+
+```css
+.doc-filter-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+}
+
+.doc-filter-search { flex: 1 1 230px; }
+.doc-filter-status,
+.doc-filter-priority,
+.doc-filter-tags { flex: 1 1 135px; }
+.doc-filter-sort { flex: 0 1 168px; min-width: 150px; max-width: 210px; }
+.doc-filter-grid > .ant-btn { flex: 0 0 42px; }
+```
+
+**时间：** 2026-11-03 23:04–23:15 +08:00
+
+---
+
+## BUG-027：文档筛选缺少阅读进度区间
+
+**描述：**  
+文档列表只支持关键词、状态、优先级、标签与排序，无法按“读到多少”筛选；顾客要求增加阅读进度筛选。
+
+**背景与上下文：**  
+文档已经有 `reading_progress`（0–100）字段，计划管理也已经使用 Slider 区间筛选；文档页只需要补齐查询参数与 UI。
+
+**分析过程：**
+
+1. 后端 `list_documents` 增加 `progress_min` / `progress_max`，复用 `_validate_progress`，并拒绝下限大于上限；
+2. 前端增加 `progressRange` 状态，默认 `[0, 100]`；
+3. Slider 只在边界变化时传参，避免默认筛选产生多余条件；
+4. 重置筛选时恢复 `[0, 100]`；
+5. 参数加入筛选计数与请求依赖，浏览器端滑动后列表自动刷新。
+
+**根因：**  
+v1.4 首版只实现了状态/优先级/标签筛选，遗漏了进度维度。
+
+**解决方法：**
+
+```python
+if progress_min is not None:
+    where.append("d.reading_progress >= ?")
+if progress_max is not None:
+    where.append("d.reading_progress <= ?")
+```
+
+```jsx
+<Slider
+  range
+  min={0}
+  max={100}
+  value={progressRange}
+  onChange={setProgressRange}
+  tooltip={{ formatter: (value) => `${value}%` }}
+/>
+```
+
+**时间：** 2026-11-03 23:04–23:18 +08:00
+
+
+---
+
 ## 附：验证方式
 
 | 缺陷 | 验证 |
@@ -950,5 +1036,7 @@ await send('Page.captureScreenshot', {
 | BUG-023 | 文档列表 Popconfirm DOM 检查 + 删除流程 E2E |
 | BUG-024 | 文档总览桌面/移动截图，进行中/未读文案分离 |
 | BUG-025 | CDP 读取 Sider 尺寸 + 全页截图复查，12 张截图侧边栏正常 |
+| BUG-026 | 1440 / 1200 / 1024 / 390px 筛选栏边界检查，排序控件未溢出 |
+| BUG-027 | `progress_min` / `progress_max` 后端测试 + 浏览器 Slider 筛选检查 |
 
-上述缺陷修复后，最终回归结果：**57 个后端测试通过（记录 17 + 计划 18 + 文档 14 + 配置 8），文档 E2E 8 项断言通过，应用 console error 为 0，生产构建成功；v1.2 计划/记录浏览器断言保持通过**。
+上述缺陷修复后，最终回归结果：**58 个后端测试通过（记录 17 + 计划 18 + 文档 15 + 配置 8），文档 E2E 8 项断言通过，应用 console error 为 0，生产构建成功；v1.2 计划/记录浏览器断言保持通过**。

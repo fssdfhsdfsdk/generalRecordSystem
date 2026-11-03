@@ -86,7 +86,11 @@ CREATE TABLE IF NOT EXISTS documents (
     id                 INTEGER PRIMARY KEY AUTOINCREMENT,
     type_id            INTEGER NOT NULL REFERENCES doc_types(id) ON DELETE RESTRICT,
     title              TEXT NOT NULL,
-    document_info      TEXT NOT NULL DEFAULT '',
+    author             TEXT NOT NULL DEFAULT '',
+    doc_time           TEXT NOT NULL DEFAULT '',
+    version            TEXT NOT NULL DEFAULT '',
+    resource_url       TEXT NOT NULL DEFAULT '',
+    info_extra         TEXT NOT NULL DEFAULT '',
     reading_notes      TEXT NOT NULL DEFAULT '',
     reading_reflections TEXT NOT NULL DEFAULT '',
     reading_status     TEXT NOT NULL DEFAULT 'unread'
@@ -138,21 +142,8 @@ def init_db(db_path: Path) -> None:
         conn.execute("PRAGMA journal_mode = WAL")
         conn.executescript(SCHEMA_SQL)
 
-        # Forward-compatible migration for an early docs.db without the
-        # internal slug column. The slug is only used to give the five seeded
-        # sections stable deep links; user-created types do not need one.
-        type_columns = {
-            row["name"] for row in conn.execute("PRAGMA table_info(doc_types)")
-        }
-        if "slug" not in type_columns:
-            conn.execute("ALTER TABLE doc_types ADD COLUMN slug TEXT")
-        if "description" not in type_columns:
-            conn.execute(
-                "ALTER TABLE doc_types ADD COLUMN description TEXT NOT NULL DEFAULT ''"
-            )
-
         conn.execute(
-            "INSERT OR IGNORE INTO app_meta(key, value) VALUES('schema_version', '1')"
+            "INSERT OR IGNORE INTO app_meta(key, value) VALUES('schema_version', '2')"
         )
         seeded = conn.execute(
             "SELECT value FROM app_meta WHERE key = 'seed_version'"
@@ -400,6 +391,14 @@ def _history_payload(row: sqlite3.Row) -> dict:
     }
 
 
+def _combined_document_info(row: sqlite3.Row) -> str:
+    parts = [
+        str(row[key] or "").strip()
+        for key in ("author", "doc_time", "version", "resource_url", "info_extra")
+    ]
+    return " · ".join(part for part in parts if part)
+
+
 def _summary_payload(row: sqlite3.Row, tags: list[str]) -> dict:
     return {
         "id": row["id"],
@@ -407,7 +406,12 @@ def _summary_payload(row: sqlite3.Row, tags: list[str]) -> dict:
         "type_name": row["type_name"],
         "type_slug": row["type_slug"],
         "title": row["title"],
-        "document_info": row["document_info"],
+        "author": row["author"],
+        "doc_time": row["doc_time"],
+        "version": row["version"],
+        "resource_url": row["resource_url"],
+        "info_extra": row["info_extra"],
+        "document_info": _combined_document_info(row),
         "reading_status": row["reading_status"],
         "reading_progress": row["reading_progress"],
         "priority": row["priority"],
@@ -433,11 +437,26 @@ def list_documents(conn: sqlite3.Connection, query: dict) -> list[dict]:
     if q:
         pattern = like_pattern(q)
         where.append(
-            "(d.title LIKE ? ESCAPE '\\' OR d.document_info LIKE ? ESCAPE '\\' "
+            "(d.title LIKE ? ESCAPE '\\' OR d.author LIKE ? ESCAPE '\\' "
+            "OR d.doc_time LIKE ? ESCAPE '\\' OR d.version LIKE ? ESCAPE '\\' "
+            "OR d.resource_url LIKE ? ESCAPE '\\' "
+            "OR d.info_extra LIKE ? ESCAPE '\\' "
             "OR d.reading_notes LIKE ? ESCAPE '\\' "
             "OR d.reading_reflections LIKE ? ESCAPE '\\')"
         )
-        params.extend([pattern, pattern, pattern, pattern])
+        params.extend([pattern] * 8)
+
+    for column, key in (
+        ("author", "author"),
+        ("doc_time", "doc_time"),
+        ("version", "version"),
+        ("resource_url", "resource_url"),
+        ("info_extra", "info_extra"),
+    ):
+        value = (query.get(key) or "").strip()
+        if value:
+            where.append(f"d.{column} LIKE ? ESCAPE '\\'")
+            params.append(like_pattern(value))
 
     status_raw = (query.get("status") or "").strip()
     if status_raw:
@@ -458,6 +477,23 @@ def list_documents(conn: sqlite3.Connection, query: dict) -> list[dict]:
         placeholders = ",".join("?" for _ in priorities)
         where.append(f"d.priority IN ({placeholders})")
         params.extend(priorities)
+
+    progress_min_raw = (query.get("progress_min") or "").strip()
+    progress_max_raw = (query.get("progress_max") or "").strip()
+    progress_min = (
+        _validate_progress(progress_min_raw) if progress_min_raw else None
+    )
+    progress_max = (
+        _validate_progress(progress_max_raw) if progress_max_raw else None
+    )
+    if progress_min is not None and progress_max is not None and progress_min > progress_max:
+        raise ApiError(400, "阅读进度下限不能大于上限")
+    if progress_min is not None:
+        where.append("d.reading_progress >= ?")
+        params.append(progress_min)
+    if progress_max is not None:
+        where.append("d.reading_progress <= ?")
+        params.append(progress_max)
 
     for tag in parse_tag_filter(query.get("tags")):
         where.append(
@@ -488,7 +524,8 @@ def list_documents(conn: sqlite3.Connection, query: dict) -> list[dict]:
     clause = (" WHERE " + " AND ".join(where)) if where else ""
     rows = conn.execute(
         "SELECT d.id, d.type_id, t.name AS type_name, t.slug AS type_slug, "
-        "       d.title, d.document_info, d.reading_status, d.reading_progress, "
+        "       d.title, d.author, d.doc_time, d.version, d.resource_url, "
+        "       d.info_extra, d.reading_status, d.reading_progress, "
         "       d.priority, d.created_at, d.updated_at, "
         "       (SELECT COUNT(*) FROM doc_reading_history h "
         "        WHERE h.document_id = d.id) AS history_count, "
@@ -508,7 +545,8 @@ def list_documents(conn: sqlite3.Connection, query: dict) -> list[dict]:
 def fetch_document(conn: sqlite3.Connection, document_id: int) -> dict:
     row = conn.execute(
         "SELECT d.id, d.type_id, t.name AS type_name, t.slug AS type_slug, "
-        "       d.title, d.document_info, d.reading_notes, d.reading_reflections, "
+        "       d.title, d.author, d.doc_time, d.version, d.resource_url, "
+        "       d.info_extra, d.reading_notes, d.reading_reflections, "
         "       d.reading_status, d.reading_progress, d.priority, "
         "       d.created_at, d.updated_at, "
         "       (SELECT COUNT(*) FROM doc_reading_history h "
@@ -621,8 +659,14 @@ def create_document(conn: sqlite3.Connection, payload: dict) -> dict:
     type_id = as_int(payload.get("type_id"), "type_id")
     fetch_doc_type(conn, type_id)
     title = clean_text(payload.get("title"), "文档名称", MAX_TITLE)
-    document_info = optional_text(
-        payload.get("document_info", ""), "文档信息", MAX_DOC_INFO
+    author = optional_text(payload.get("author", ""), "作者", MAX_DOC_INFO)
+    doc_time = optional_text(payload.get("doc_time", ""), "时间", MAX_DOC_INFO)
+    version = optional_text(payload.get("version", ""), "版本", MAX_DOC_INFO)
+    resource_url = optional_text(
+        payload.get("resource_url", ""), "资源地址", MAX_DOC_INFO
+    )
+    info_extra = optional_text(
+        payload.get("info_extra", ""), "其它信息", MAX_DOC_INFO
     )
     reading_notes = optional_text(
         payload.get("reading_notes", ""), "阅读笔记", MAX_FIELD_VALUE
@@ -640,14 +684,18 @@ def create_document(conn: sqlite3.Connection, payload: dict) -> dict:
     try:
         with conn:
             cur = conn.execute(
-                "INSERT INTO documents(type_id, title, document_info, "
-                "reading_notes, reading_reflections, reading_status, "
-                "reading_progress, priority, created_at, updated_at) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO documents(type_id, title, author, doc_time, version, "
+                "resource_url, info_extra, reading_notes, reading_reflections, "
+                "reading_status, reading_progress, priority, created_at, updated_at) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     type_id,
                     title,
-                    document_info,
+                    author,
+                    doc_time,
+                    version,
+                    resource_url,
+                    info_extra,
                     reading_notes,
                     reading_reflections,
                     status,
@@ -680,10 +728,30 @@ def update_document(
         if "title" in payload
         else existing["title"]
     )
-    document_info = (
-        optional_text(payload.get("document_info"), "文档信息", MAX_DOC_INFO)
-        if "document_info" in payload
-        else existing["document_info"]
+    author = (
+        optional_text(payload.get("author"), "作者", MAX_DOC_INFO)
+        if "author" in payload
+        else existing["author"]
+    )
+    doc_time = (
+        optional_text(payload.get("doc_time"), "时间", MAX_DOC_INFO)
+        if "doc_time" in payload
+        else existing["doc_time"]
+    )
+    version = (
+        optional_text(payload.get("version"), "版本", MAX_DOC_INFO)
+        if "version" in payload
+        else existing["version"]
+    )
+    resource_url = (
+        optional_text(payload.get("resource_url"), "资源地址", MAX_DOC_INFO)
+        if "resource_url" in payload
+        else existing["resource_url"]
+    )
+    info_extra = (
+        optional_text(payload.get("info_extra"), "其它信息", MAX_DOC_INFO)
+        if "info_extra" in payload
+        else existing["info_extra"]
     )
     reading_notes = (
         optional_text(payload.get("reading_notes"), "阅读笔记", MAX_FIELD_VALUE)
@@ -727,13 +795,18 @@ def update_document(
     try:
         with conn:
             conn.execute(
-                "UPDATE documents SET type_id = ?, title = ?, document_info = ?, "
+                "UPDATE documents SET type_id = ?, title = ?, author = ?, "
+                "doc_time = ?, version = ?, resource_url = ?, info_extra = ?, "
                 "reading_notes = ?, reading_reflections = ?, reading_status = ?, "
                 "reading_progress = ?, priority = ?, updated_at = ? WHERE id = ?",
                 (
                     type_id,
                     title,
-                    document_info,
+                    author,
+                    doc_time,
+                    version,
+                    resource_url,
+                    info_extra,
                     reading_notes,
                     reading_reflections,
                     status,

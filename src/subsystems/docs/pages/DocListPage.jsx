@@ -7,6 +7,7 @@ import {
   Progress,
   Result,
   Select,
+  Slider,
   Space,
   Table,
   Tooltip,
@@ -30,12 +31,12 @@ import { formatShortDate } from '../../../utils'
 import { useAppData } from '../../../shell/AppDataContext'
 import PageHeader from '../../../components/PageHeader'
 import EmptyState from '../../../components/EmptyState'
-import EllipsisText from '../../../components/EllipsisText'
 import TitleText from '../../../components/TitleText'
 import DocTypeIcon from '../components/DocTypeIcon'
 import DocStatusTag from '../components/DocStatusTag'
 import DocPriorityTag from '../components/DocPriorityTag'
 import DocTagLine from '../components/DocTagLine'
+import DocInfoCell from '../components/DocInfoCell'
 import {
   DOC_PRIORITY_OPTIONS,
   DOC_STATUS_OPTIONS,
@@ -62,6 +63,12 @@ export default function DocListPage({ typeId }) {
   const [q, setQ] = useState('')
   const [statuses, setStatuses] = useState([])
   const [priorities, setPriorities] = useState([])
+  const [progressRange, setProgressRange] = useState([0, 100])
+  const [infoAuthor, setInfoAuthor] = useState('')
+  const [infoTime, setInfoTime] = useState('')
+  const [infoVersion, setInfoVersion] = useState('')
+  const [infoResource, setInfoResource] = useState('')
+  const [infoExtra, setInfoExtra] = useState('')
   const [tags, setTags] = useState([])
   const [tagOptions, setTagOptions] = useState([])
   const [sort, setSort] = useState('updated_desc')
@@ -71,6 +78,12 @@ export default function DocListPage({ typeId }) {
     setQ('')
     setStatuses([])
     setPriorities([])
+    setProgressRange([0, 100])
+    setInfoAuthor('')
+    setInfoTime('')
+    setInfoVersion('')
+    setInfoResource('')
+    setInfoExtra('')
     setTags([])
     setSort('updated_desc')
   }, [typeId])
@@ -93,6 +106,13 @@ export default function DocListPage({ typeId }) {
           status: statuses.join(','),
           priority: priorities.join(','),
           tags: tags.join(','),
+          progress_min: progressRange[0] > 0 ? progressRange[0] : undefined,
+          progress_max: progressRange[1] < 100 ? progressRange[1] : undefined,
+          author: infoAuthor,
+          doc_time: infoTime,
+          version: infoVersion,
+          resource_url: infoResource,
+          info_extra: infoExtra,
           sort,
           limit: 500,
         })
@@ -110,12 +130,33 @@ export default function DocListPage({ typeId }) {
       alive = false
       clearTimeout(timer)
     }
-  }, [typeId, q, statuses, priorities, tags, sort, reloadToken, message])
+  }, [
+    typeId,
+    q,
+    statuses,
+    priorities,
+    progressRange,
+    infoAuthor,
+    infoTime,
+    infoVersion,
+    infoResource,
+    infoExtra,
+    tags,
+    sort,
+    reloadToken,
+    message,
+  ])
 
   const resetFilters = () => {
     setQ('')
     setStatuses([])
     setPriorities([])
+    setProgressRange([0, 100])
+    setInfoAuthor('')
+    setInfoTime('')
+    setInfoVersion('')
+    setInfoResource('')
+    setInfoExtra('')
     setTags([])
     setSort('updated_desc')
   }
@@ -124,6 +165,12 @@ export default function DocListPage({ typeId }) {
     (q ? 1 : 0) +
     (statuses.length ? 1 : 0) +
     (priorities.length ? 1 : 0) +
+    (progressRange[0] > 0 || progressRange[1] < 100 ? 1 : 0) +
+    (infoAuthor ? 1 : 0) +
+    (infoTime ? 1 : 0) +
+    (infoVersion ? 1 : 0) +
+    (infoResource ? 1 : 0) +
+    (infoExtra ? 1 : 0) +
     (tags.length ? 1 : 0) +
     (sort !== 'updated_desc' ? 1 : 0)
 
@@ -168,9 +215,9 @@ export default function DocListPage({ typeId }) {
       title: '文档信息',
       dataIndex: 'document_info',
       key: 'document_info',
-      width: 220,
+      width: 240,
       responsive: ['lg'],
-      render: (value) => <EllipsisText text={value} maxChars={36} />,
+      render: (_, record) => <DocInfoCell doc={record} />,
     },
     {
       title: '标签',
@@ -351,7 +398,7 @@ export default function DocListPage({ typeId }) {
             value={q}
             onChange={(event) => setQ(event.target.value)}
             prefix={<SearchOutlined className="input-prefix" />}
-            placeholder="搜索名称、文档信息、笔记或感想"
+            placeholder="搜索名称、信息、笔记或感想"
             className="doc-filter-search"
           />
           <Select
@@ -374,6 +421,22 @@ export default function DocListPage({ typeId }) {
             placeholder="优先级"
             className="doc-filter-priority"
           />
+          <div className="doc-filter-progress">
+            <div className="doc-filter-progress-head">
+              <span>阅读进度</span>
+              <strong>
+                {progressRange[0]}–{progressRange[1]}%
+              </strong>
+            </div>
+            <Slider
+              range
+              min={0}
+              max={100}
+              value={progressRange}
+              onChange={setProgressRange}
+              tooltip={{ formatter: (value) => `${value}%` }}
+            />
+          </div>
           <Select
             mode="multiple"
             allowClear
@@ -400,6 +463,49 @@ export default function DocListPage({ typeId }) {
             />
           </Tooltip>
         </div>
+        <div className="doc-info-filter-row">
+          <div className="doc-info-filter-heading">
+            <span>文档信息筛选</span>
+            <span>作者、时间、版本、资源地址分别筛选；列表仍合并为「文档信息」一列</span>
+          </div>
+          <div className="doc-info-filter-grid">
+            <Input
+              allowClear
+              value={infoAuthor}
+              onChange={(event) => setInfoAuthor(event.target.value)}
+              placeholder="作者"
+              aria-label="按作者筛选"
+            />
+            <Input
+              allowClear
+              value={infoTime}
+              onChange={(event) => setInfoTime(event.target.value)}
+              placeholder="时间"
+              aria-label="按时间筛选"
+            />
+            <Input
+              allowClear
+              value={infoVersion}
+              onChange={(event) => setInfoVersion(event.target.value)}
+              placeholder="版本"
+              aria-label="按版本筛选"
+            />
+            <Input
+              allowClear
+              value={infoResource}
+              onChange={(event) => setInfoResource(event.target.value)}
+              placeholder="资源地址"
+              aria-label="按资源地址筛选"
+            />
+            <Input
+              allowClear
+              value={infoExtra}
+              onChange={(event) => setInfoExtra(event.target.value)}
+              placeholder="其它信息"
+              aria-label="按其它信息筛选"
+            />
+          </div>
+        </div>
       </div>
 
       <div className="doc-list-summary">
@@ -407,7 +513,7 @@ export default function DocListPage({ typeId }) {
           共 <strong>{documents.length}</strong> 篇文档
         </span>
         <span className="muted-text">
-          文档信息在列表中单列展示，超长时省略，悬浮可查看完整内容。
+          文档信息按字段分行展示，空字段省略；每行超长省略，悬浮查看完整内容。
         </span>
       </div>
 
@@ -440,7 +546,7 @@ export default function DocListPage({ typeId }) {
           loading={loading}
           dataSource={documents}
           columns={columns}
-          scroll={{ x: 1030 }}
+          scroll={{ x: 1050 }}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,

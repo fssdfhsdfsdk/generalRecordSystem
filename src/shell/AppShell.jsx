@@ -7,7 +7,8 @@ import {
   FileTextOutlined,
   FlagOutlined,
   HomeOutlined,
-  MenuOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
   ProjectOutlined,
   ReadOutlined,
   SettingOutlined,
@@ -332,12 +333,18 @@ export default function AppShell() {
       <Layout className="app-main">
         <Header className="app-header">
           <div className="header-left">
-            <Button
-              className="mobile-menu-button"
-              type="text"
-              icon={<MenuOutlined />}
-              onClick={() => setCollapsed((value) => !value)}
-            />
+            <Tooltip title={collapsed ? '展开侧边栏' : '收起侧边栏'}>
+              <Button
+                className="mobile-menu-button"
+                type="text"
+                aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
+                aria-expanded={!collapsed}
+                icon={
+                  collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />
+                }
+                onClick={() => setCollapsed((value) => !value)}
+              />
+            </Tooltip>
             <div className="header-crumb">
               <span className="crumb-root">{crumbs[0]}</span>
               <span className="crumb-slash">/</span>

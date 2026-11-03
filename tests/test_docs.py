@@ -74,7 +74,11 @@ class DocApiTestCase(unittest.TestCase):
         payload = {
             "type_id": 1,
             "title": "示例文档",
-            "document_info": "作者 / 2026 / 第 1 版",
+            "author": "作者",
+            "doc_time": "2026",
+            "version": "第 1 版",
+            "resource_url": "https://example.com/resource",
+            "info_extra": "示例补充",
             "reading_status": "reading",
             "reading_progress": 35,
             "priority": 4,
@@ -115,6 +119,9 @@ class DocApiTestCase(unittest.TestCase):
                     "AND name NOT LIKE 'sqlite_%'"
                 )
             }
+            document_columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(documents)")
+            }
         finally:
             conn.close()
         self.assertEqual(
@@ -128,6 +135,11 @@ class DocApiTestCase(unittest.TestCase):
                 "doc_reading_history",
             },
         )
+        self.assertTrue(
+            {"author", "doc_time", "version", "resource_url", "info_extra"}
+            <= document_columns
+        )
+        self.assertNotIn("document_info", document_columns)
 
     def test_seed_is_idempotent_and_deleted_default_is_not_restored(self):
         from backend.docs import store as docs_store
@@ -205,6 +217,59 @@ class DocApiTestCase(unittest.TestCase):
         self.assertIn("# 笔记", doc["reading_notes"])
         self.assertEqual(doc["histories"][0]["start_at"], "2026-11-01 09:00:00")
         self.assertEqual(doc["histories"][0]["duration_hours"], 1.5)
+
+    def test_structured_document_info_and_filters(self):
+        status, doc = self.request(
+            "POST",
+            "/api/docs",
+            {
+                "type_id": 1,
+                "title": "结构化信息测试",
+                "author": "Bryant",
+                "doc_time": "2016-08",
+                "version": "第 3 版",
+                "resource_url": "https://csapp.cs.cmu.edu/",
+                "info_extra": "课程配套材料",
+            },
+        )
+        self.assertEqual(status, 201, doc)
+        self.assertEqual(doc["author"], "Bryant")
+        self.assertEqual(doc["doc_time"], "2016-08")
+        self.assertEqual(doc["version"], "第 3 版")
+        self.assertEqual(doc["resource_url"], "https://csapp.cs.cmu.edu/")
+        self.assertEqual(doc["info_extra"], "课程配套材料")
+        self.assertEqual(
+            doc["document_info"],
+            "Bryant · 2016-08 · 第 3 版 · https://csapp.cs.cmu.edu/ · 课程配套材料",
+        )
+
+        for key, value in (
+            ("author", "Bryant"),
+            ("doc_time", "2016"),
+            ("version", "第 3 版"),
+            ("resource_url", "csapp"),
+            ("info_extra", "配套"),
+        ):
+            query = urllib.parse.quote(value)
+            result = self.request("GET", f"/api/docs?{key}={query}")[1]
+            self.assertEqual(
+                [item["id"] for item in result["documents"]], [doc["id"]], key
+            )
+
+        query = urllib.parse.quote("csapp")
+        result = self.request("GET", f"/api/docs?q={query}")[1]
+        self.assertEqual([item["id"] for item in result["documents"]], [doc["id"]])
+
+        status, updated = self.request(
+            "PUT",
+            f"/api/docs/{doc['id']}",
+            {"author": "Randal E. Bryant", "version": "第 3 版（修订）"},
+        )
+        self.assertEqual(status, 200, updated)
+        self.assertEqual(updated["author"], "Randal E. Bryant")
+        self.assertEqual(updated["version"], "第 3 版（修订）")
+        self.assertEqual(updated["doc_time"], "2016-08")
+        self.assertTrue(updated["document_info"].startswith("Randal E. Bryant · 2016-08"))
 
     def test_partial_update_preserves_other_fields(self):
         doc = self.create_doc()
@@ -402,6 +467,35 @@ class DocApiTestCase(unittest.TestCase):
             [item["id"] for item in self.request("GET", "/api/docs?priority=5")[1]["documents"]],
             [first["id"]],
         )
+        self.assertEqual(
+            [
+                item["id"]
+                for item in self.request("GET", "/api/docs?progress_min=50")[1]["documents"]
+            ],
+            [third["id"], first["id"]],
+        )
+        self.assertEqual(
+            [
+                item["id"]
+                for item in self.request("GET", "/api/docs?progress_max=50")[1]["documents"]
+            ],
+            [second["id"]],
+        )
+        self.assertEqual(
+            [
+                item["id"]
+                for item in self.request(
+                    "GET", "/api/docs?progress_min=90&progress_max=100"
+                )[1]["documents"]
+            ],
+            [third["id"]],
+        )
+        status, data = self.request("GET", "/api/docs?progress_min=101")
+        self.assertEqual(status, 400)
+        status, data = self.request(
+            "GET", "/api/docs?progress_min=80&progress_max=20"
+        )
+        self.assertEqual(status, 400)
         both_tags = urllib.parse.quote("Python,学习")
         self.assertEqual(
             [

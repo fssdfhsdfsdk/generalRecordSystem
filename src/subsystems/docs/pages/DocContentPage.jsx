@@ -31,6 +31,7 @@ import TagPill from '../../../components/TagPill'
 import DocTypeIcon from '../components/DocTypeIcon'
 import DocStatusTag from '../components/DocStatusTag'
 import DocPriorityTag from '../components/DocPriorityTag'
+import { httpLink } from '../docInfo'
 import {
   docStatusMeta,
   docTypeMeta,
@@ -108,6 +109,15 @@ export default function DocContentPage({ documentId }) {
     : null
   const typeMeta = doc ? docTypeMeta(type) : null
   const statusMeta = doc ? docStatusMeta(doc.reading_status) : null
+  const infoEntries = doc
+    ? [
+        ['作者', doc.author],
+        ['时间', doc.doc_time],
+        ['版本', doc.version],
+        ['资源地址', doc.resource_url],
+        ['其它信息', doc.info_extra],
+      ].filter(([, value]) => String(value || '').trim())
+    : []
 
   const historyItems = useMemo(() => {
     if (!doc) return []
@@ -333,12 +343,37 @@ export default function DocContentPage({ documentId }) {
           <section className="doc-side-card doc-info-card">
             <div className="doc-side-card-head">
               <span>文档信息</span>
-              <Tooltip title="作者、时间、版本、资源地址等可放在同一列">
-                <span className="doc-side-hint">单列展示</span>
+              <Tooltip title="作者、时间、版本、资源地址分别保存并可筛选；列表合并为一列">
+                <span className="doc-side-hint">独立字段</span>
               </Tooltip>
             </div>
-            {doc.document_info ? (
-              <p className="doc-info-full">{doc.document_info}</p>
+            {infoEntries.length ? (
+              <dl className="doc-info-list">
+                {infoEntries.map(([label, value]) => {
+                  const href = label === '资源地址' ? httpLink(value) : ''
+                  return (
+                    <div className="doc-info-row" key={label}>
+                      <dt>{label}</dt>
+                      <dd>
+                        {href ? (
+                          <Tooltip title={value}>
+                            <a
+                              className="doc-info-link"
+                              href={href}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                            >
+                              资源地址
+                            </a>
+                          </Tooltip>
+                        ) : (
+                          value
+                        )}
+                      </dd>
+                    </div>
+                  )
+                })}
+              </dl>
             ) : (
               <p className="muted-text">未填写。可在编辑页补充作者、时间、版本或资源地址。</p>
             )}
