@@ -1184,22 +1184,36 @@ def _set_plan_tags(conn: sqlite3.Connection, plan_id: int, tags: list[str]) -> N
 
 
 def list_plan_tags(
-    conn: sqlite3.Connection, sort: str = "count", q: str = ""
+    conn: sqlite3.Connection,
+    sort: str = "count",
+    q: str = "",
+    types: list[str] | None = None,
 ) -> list[dict]:
-    where = ""
+    types = list(dict.fromkeys(types or []))
+    for type_ in types:
+        _validate_plan_type(type_)
+    where: list[str] = []
     params: list = []
     if q:
-        where = "WHERE t.name LIKE ? ESCAPE '\\'"
+        where.append("t.name LIKE ? ESCAPE '\\'")
         params.append(like_pattern(q))
+    join = "LEFT JOIN plan_tag_links l ON l.tag_id = t.id"
+    count_expr = "COUNT(l.plan_id)"
+    if types:
+        placeholders = ",".join("?" for _ in types)
+        join += " JOIN plans p ON p.id = l.plan_id"
+        where.append(f"p.plan_type IN ({placeholders})")
+        params.extend(types)
+        count_expr = "COUNT(DISTINCT p.id)"
+    clause = (" WHERE " + " AND ".join(where)) if where else ""
     order = "t.name COLLATE NOCASE ASC"
     if sort == "count":
         order = "count DESC, t.name COLLATE NOCASE ASC"
     elif sort != "name":
         raise ApiError(400, "sort 参数必须是 name 或 count")
     rows = conn.execute(
-        "SELECT t.id, t.name, COUNT(l.plan_id) AS count FROM plan_tags t "
-        "LEFT JOIN plan_tag_links l ON l.tag_id = t.id "
-        f"{where} GROUP BY t.id ORDER BY {order}",
+        f"SELECT t.id, t.name, {count_expr} AS count FROM plan_tags t "
+        f"{join}{clause} GROUP BY t.id ORDER BY {order}",
         params,
     ).fetchall()
     return [{"id": r["id"], "name": r["name"], "count": r["count"]} for r in rows]

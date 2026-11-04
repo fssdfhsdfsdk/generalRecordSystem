@@ -39,6 +39,7 @@ from backend.common import (  # noqa: F401 - compatibility re-exports
     DIST_DIR,
     MAX_BODY_BYTES,
     ApiError,
+    as_int,
     connect,
     db_session,
 )
@@ -49,6 +50,16 @@ from backend.records import store as records_store
 
 # Kept for callers/tests that only need the records database.
 init_db = records_store.init_db
+
+
+def _split_int_list(raw, label: str) -> list[int]:
+    """Parse a comma-separated query parameter into unique positive ints."""
+    parts = [part.strip() for part in str(raw or "").split(",") if part.strip()]
+    return list(dict.fromkeys(as_int(part, label) for part in parts))
+
+
+def _split_text_list(raw) -> list[str]:
+    return [part.strip() for part in str(raw or "").split(",") if part.strip()]
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -253,9 +264,10 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/tags":
             if method == "GET":
+                type_ids = _split_int_list(q.get("type_id"), "type_id")
                 with db_session(self.db_path) as conn:
                     tags = records_store.list_tags(
-                        conn, q.get("sort", "count"), q.get("q", "")
+                        conn, q.get("sort", "count"), q.get("q", ""), type_ids
                     )
                 self._send_json({"tags": tags, "total": len(tags)})
                 return
@@ -306,9 +318,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
         if path == "/api/docs/tags" and method == "GET":
+            type_ids = _split_int_list(q.get("type_id"), "type_id")
             with db_session(self.docs_db_path) as conn:
                 tags = docs_store.list_doc_tags(
-                    conn, q.get("sort", "count"), q.get("q", "")
+                    conn, q.get("sort", "count"), q.get("q", ""), type_ids
                 )
             self._send_json({"tags": tags, "total": len(tags)})
             return
@@ -396,9 +409,10 @@ class Handler(BaseHTTPRequestHandler):
 
         # -- plan management -------------------------------------------------
         if path == "/api/plans/tags" and method == "GET":
+            types = _split_text_list(q.get("type"))
             with db_session(self.plan_db_path) as conn:
                 tags = plans_store.list_plan_tags(
-                    conn, q.get("sort", "count"), q.get("q", "")
+                    conn, q.get("sort", "count"), q.get("q", ""), types
                 )
             self._send_json({"tags": tags, "total": len(tags)})
             return

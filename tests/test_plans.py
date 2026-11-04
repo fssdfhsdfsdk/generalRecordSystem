@@ -673,6 +673,27 @@ class PlanApiTestCase(unittest.TestCase):
         status, data = self.request("DELETE", "/api/plans/tags/orphans")
         self.assertEqual(data["deleted"], 2)
 
+    def test_tag_list_can_be_limited_to_plan_types(self):
+        self.create_plan(plan_type="short", tags=["共享", "短期标签"])
+        self.create_plan(plan_type="long", tags=["共享", "长远标签"])
+
+        status, data = self.request("GET", "/api/plans/tags?type=short")
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            {tag["name"]: tag["count"] for tag in data["tags"]},
+            {"共享": 1, "短期标签": 1},
+        )
+
+        status, data = self.request("GET", "/api/plans/tags?type=short,long")
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            {tag["name"]: tag["count"] for tag in data["tags"]},
+            {"共享": 2, "短期标签": 1, "长远标签": 1},
+        )
+
+        status, _ = self.request("GET", "/api/plans/tags?type=unknown")
+        self.assertEqual(status, 400)
+
     # -- overview / errors ----------------------------------------------
     def test_overview_and_stats(self):
         self.create_plan(title="短期一", plan_type="short")

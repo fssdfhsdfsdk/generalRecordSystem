@@ -138,6 +138,10 @@ export default function DocContentPage({ documentId }) {
     ]
   }, [doc])
 
+  const filterByTag = (tag) => {
+    navigate(`/docs/tags/${encodeURIComponent(tag)}`)
+  }
+
   const remove = async () => {
     try {
       await docApi.remove(doc.id)
@@ -238,7 +242,7 @@ export default function DocContentPage({ documentId }) {
         {doc.tags.length ? (
           <div className="doc-content-tags">
             {doc.tags.map((tag) => (
-              <TagPill key={tag} name={tag} />
+              <TagPill key={tag} name={tag} onClick={filterByTag} />
             ))}
           </div>
         ) : (
@@ -417,7 +421,12 @@ export default function DocContentPage({ documentId }) {
             {doc.tags.length ? (
               <div className="doc-side-tags">
                 {doc.tags.map((tag) => (
-                  <TagPill key={tag} name={tag} size="sm" />
+                  <TagPill
+                    key={tag}
+                    name={tag}
+                    size="sm"
+                    onClick={filterByTag}
+                  />
                 ))}
               </div>
             ) : (

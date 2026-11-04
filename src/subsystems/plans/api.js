@@ -49,7 +49,7 @@ export const planApi = {
   removeActual: (id, actualId) =>
     request(`/api/plans/${id}/actuals/${actualId}`, { method: 'DELETE' }),
 
-  listTags: ({ sort = 'count', q = '' } = {}) =>
-    request(`/api/plans/tags${queryString({ sort, q })}`),
+  listTags: ({ sort = 'count', q = '', type } = {}) =>
+    request(`/api/plans/tags${queryString({ sort, q, type })}`),
   cleanupTags: () => request('/api/plans/tags/orphans', { method: 'DELETE' }),
 }

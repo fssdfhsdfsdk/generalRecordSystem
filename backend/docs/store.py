@@ -933,22 +933,34 @@ def delete_history(
 
 
 def list_doc_tags(
-    conn: sqlite3.Connection, sort: str = "count", q: str = ""
+    conn: sqlite3.Connection,
+    sort: str = "count",
+    q: str = "",
+    type_ids: list[int] | None = None,
 ) -> list[dict]:
-    where = ""
+    type_ids = list(dict.fromkeys(type_ids or []))
+    where: list[str] = []
     params: list = []
     if q:
-        where = "WHERE t.name LIKE ? ESCAPE '\\'"
+        where.append("t.name LIKE ? ESCAPE '\\'")
         params.append(like_pattern(q))
+    join = "LEFT JOIN doc_tag_links dl ON dl.tag_id = t.id"
+    count_expr = "COUNT(dl.document_id)"
+    if type_ids:
+        placeholders = ",".join("?" for _ in type_ids)
+        join += " JOIN documents d ON d.id = dl.document_id"
+        where.append(f"d.type_id IN ({placeholders})")
+        params.extend(type_ids)
+        count_expr = "COUNT(DISTINCT d.id)"
+    clause = (" WHERE " + " AND ".join(where)) if where else ""
     order = "t.name COLLATE NOCASE ASC"
     if sort == "count":
         order = "count DESC, t.name COLLATE NOCASE ASC"
     elif sort != "name":
         raise ApiError(400, "sort 参数必须是 name 或 count")
     rows = conn.execute(
-        "SELECT t.id, t.name, COUNT(dl.document_id) AS count FROM doc_tags t "
-        "LEFT JOIN doc_tag_links dl ON dl.tag_id = t.id "
-        f"{where} GROUP BY t.id ORDER BY {order}",
+        f"SELECT t.id, t.name, {count_expr} AS count FROM doc_tags t "
+        f"{join}{clause} GROUP BY t.id ORDER BY {order}",
         params,
     ).fetchall()
     return [{"id": r["id"], "name": r["name"], "count": r["count"]} for r in rows]

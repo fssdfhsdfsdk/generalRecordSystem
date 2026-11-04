@@ -51,9 +51,14 @@ const SORT_OPTIONS = [
   { value: 'title_asc', label: '名称 A-Z' },
 ]
 
-export default function DocListPage({ typeId }) {
+export default function DocListPage({
+  typeId,
+  initialTags = [],
+  tagMode = false,
+}) {
   const { message } = AntApp.useApp()
   const { docTypes, docTypesLoading } = useAppData()
+  const initialTagKey = initialTags.join('\u0000')
   const type = useMemo(
     () => docTypes.find((item) => String(item.id) === String(typeId)),
     [docTypes, typeId],
@@ -69,10 +74,11 @@ export default function DocListPage({ typeId }) {
   const [infoVersion, setInfoVersion] = useState('')
   const [infoResource, setInfoResource] = useState('')
   const [infoExtra, setInfoExtra] = useState('')
-  const [tags, setTags] = useState([])
+  const [tags, setTags] = useState(() => initialTags)
   const [tagOptions, setTagOptions] = useState([])
   const [sort, setSort] = useState('updated_desc')
   const [reloadToken, setReloadToken] = useState(0)
+  const activeTagsText = tags.map((tag) => `#${tag}`).join(' ')
 
   useEffect(() => {
     setQ('')
@@ -84,16 +90,19 @@ export default function DocListPage({ typeId }) {
     setInfoVersion('')
     setInfoResource('')
     setInfoExtra('')
-    setTags([])
+    setTags(initialTags)
     setSort('updated_desc')
-  }, [typeId])
+    // The key tracks the route-provided tag filter without re-running on
+    // every local tag selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typeId, initialTagKey])
 
   useEffect(() => {
     docApi
-      .listTags({ sort: 'count' })
+      .listTags({ sort: 'count', type_id: tagMode ? undefined : typeId })
       .then((data) => setTagOptions(data.tags))
       .catch(() => setTagOptions([]))
-  }, [reloadToken])
+  }, [reloadToken, tagMode, typeId])
 
   useEffect(() => {
     let alive = true
@@ -101,7 +110,7 @@ export default function DocListPage({ typeId }) {
       setLoading(true)
       try {
         const data = await docApi.list({
-          type_id: typeId,
+          type_id: tagMode ? undefined : typeId,
           q,
           status: statuses.join(','),
           priority: priorities.join(','),
@@ -132,6 +141,7 @@ export default function DocListPage({ typeId }) {
     }
   }, [
     typeId,
+    tagMode,
     q,
     statuses,
     priorities,
@@ -199,6 +209,16 @@ export default function DocListPage({ typeId }) {
           <span className="doc-title-line">
             <TitleText text={record.title} maxChars={48} />
           </span>
+          {record.tags?.length ? (
+            <Tooltip
+              title={record.tags.map((tag) => `#${tag}`).join('  ')}
+              placement="topLeft"
+            >
+              <span className="doc-title-tags">
+                {record.tags.map((tag) => `#${tag}`).join('  ')}
+              </span>
+            </Tooltip>
+          ) : null}
           <span className="doc-title-meta">
             {formatShortDate(record.updated_at)}
             {record.history_count ? ` · ${record.history_count} 次阅读` : ''}
@@ -211,6 +231,25 @@ export default function DocListPage({ typeId }) {
         </button>
       ),
     },
+    ...(tagMode
+      ? [
+          {
+            title: '类型',
+            dataIndex: 'type_name',
+            key: 'type_name',
+            width: 130,
+            render: (name, record) => (
+              <button
+                type="button"
+                className="type-text-link"
+                onClick={() => navigate(`/docs/type/${record.type_id}`)}
+              >
+                {name}
+              </button>
+            ),
+          },
+        ]
+      : []),
     {
       title: '文档信息',
       dataIndex: 'document_info',
@@ -225,7 +264,25 @@ export default function DocListPage({ typeId }) {
       key: 'tags',
       width: 160,
       responsive: ['xl'],
-      render: (value) => <DocTagLine tags={value} max={2} />,
+      render: (value) => (
+        <DocTagLine
+          tags={value}
+          max={2}
+          onTagClick={(tag) =>
+            setTags((current) => {
+              const exists = current.some(
+                (item) => item.toLocaleLowerCase() === tag.toLocaleLowerCase(),
+              )
+              return exists
+                ? current.filter(
+                    (item) =>
+                      item.toLocaleLowerCase() !== tag.toLocaleLowerCase(),
+                  )
+                : [...current, tag]
+            })
+          }
+        />
+      ),
     },
     {
       title: '状态',
@@ -304,7 +361,7 @@ export default function DocListPage({ typeId }) {
     },
   ]
 
-  if (!docTypesLoading && !type) {
+  if (!tagMode && !docTypesLoading && !type) {
     return (
       <div className="page">
         <Result
@@ -324,7 +381,7 @@ export default function DocListPage({ typeId }) {
     )
   }
 
-  if (!type) {
+  if (!tagMode && !type) {
     return (
       <div className="page">
         <div className="page-loading">
@@ -334,45 +391,85 @@ export default function DocListPage({ typeId }) {
     )
   }
 
-  const typeMeta = docTypeMeta(type)
+  const typeMeta = type ? docTypeMeta(type) : null
 
   return (
     <div className="page doc-list-page">
       <PageHeader
-        eyebrow="DOCUMENT TYPE"
+        eyebrow={tagMode ? 'DOCUMENT TAGS' : 'DOCUMENT TYPE'}
         title={
-          <span className="title-with-icon">
-            <DocTypeIcon type={type} size="lg" />
-            {type.name}
-          </span>
+          tagMode ? (
+            <span className="title-with-mode">
+              文档标签筛选
+              <span className="mode-badge">AND</span>
+            </span>
+          ) : (
+            <span className="title-with-icon">
+              <DocTypeIcon type={type} size="lg" />
+              {type.name}
+            </span>
+          )
         }
-        description={`${type.count || type.document_count || 0} 篇文档。${type.description || '这一类文档会独立归档。'}`}
+        description={
+          tagMode
+            ? tags.length
+              ? `默认在所有文档类型中筛选同时包含 ${activeTagsText} 的文档（AND）。`
+              : '默认筛选所有文档类型；选择标签后，只显示同时包含所选标签的文档。'
+            : `${type.count || type.document_count || 0} 篇文档。${type.description || '这一类文档会独立归档。'}`
+        }
         extra={
-          <Space wrap>
-            <Button icon={<SettingOutlined />} onClick={() => navigate('/docs/types')}>
-              类型管理
-            </Button>
-            <Button icon={<TagsOutlined />} onClick={() => navigate('/docs/tags')}>
-              标签管理
-            </Button>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => navigate(`/docs/new?type=${type.id}`)}
-            >
-              新建文档
-            </Button>
-          </Space>
+          tagMode ? (
+            <Space wrap>
+              <Button
+                icon={<TagsOutlined />}
+                onClick={() => navigate('/docs/tags')}
+              >
+                返回文档标签
+              </Button>
+              <Button icon={<BookOutlined />} onClick={() => navigate('/docs')}>
+                文档总览
+              </Button>
+            </Space>
+          ) : (
+            <Space wrap>
+              <Button
+                icon={<SettingOutlined />}
+                onClick={() => navigate('/docs/types')}
+              >
+                类型管理
+              </Button>
+              <Button
+                icon={<TagsOutlined />}
+                onClick={() => navigate('/docs/tags')}
+              >
+                标签管理
+              </Button>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => navigate(`/docs/new?type=${type.id}`)}
+              >
+                新建文档
+              </Button>
+            </Space>
+          )
         }
       >
-        <div className="doc-type-crumb-line">
-          <span className={`doc-type-kicker doc-text-${typeMeta.tone}`}>
-            {typeMeta.kicker}
-          </span>
-          <span className="muted-text">
-            {type.slug ? '默认类型' : '自定义类型'}
-          </span>
-        </div>
+        {tagMode ? (
+          <div className="doc-type-crumb-line">
+            <span className="doc-type-kicker doc-text-violet">TAG FILTER</span>
+            <span className="muted-text">默认对所有文档类型生效</span>
+          </div>
+        ) : (
+          <div className="doc-type-crumb-line">
+            <span className={`doc-type-kicker doc-text-${typeMeta.tone}`}>
+              {typeMeta.kicker}
+            </span>
+            <span className="muted-text">
+              {type.slug ? '默认类型' : '自定义类型'}
+            </span>
+          </div>
+        )}
       </PageHeader>
 
       <div className="doc-filter-card">
@@ -520,22 +617,39 @@ export default function DocListPage({ typeId }) {
       {!loading && !documents.length ? (
         <EmptyState
           icon={<BookOutlined />}
-          title={filterCount ? '没有匹配的文档' : `「${type.name}」还没有文档`}
+          title={
+            filterCount
+              ? '没有匹配的文档'
+              : tagMode
+                ? '还没有文档'
+                : `「${type.name}」还没有文档`
+          }
           description={
             filterCount
               ? '试试减少筛选条件，或者清空搜索。'
-              : '从一篇具体的书、论文或材料开始，后续可以慢慢补充笔记与感想。'
+              : tagMode
+                ? '先在其他页面添加文档和标签，再回来查看关联结果。'
+                : '从一篇具体的书、论文或材料开始，后续可以慢慢补充笔记与感想。'
           }
           action={
             <Space>
               {filterCount ? <Button onClick={resetFilters}>清空筛选</Button> : null}
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => navigate(`/docs/new?type=${type.id}`)}
-              >
-                新建文档
-              </Button>
+              {tagMode ? (
+                <Button
+                  icon={<TagsOutlined />}
+                  onClick={() => navigate('/docs/tags')}
+                >
+                  返回文档标签
+                </Button>
+              ) : (
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={() => navigate(`/docs/new?type=${type.id}`)}
+                >
+                  新建文档
+                </Button>
+              )}
             </Space>
           }
         />

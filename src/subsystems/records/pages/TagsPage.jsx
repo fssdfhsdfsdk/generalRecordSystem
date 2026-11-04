@@ -5,6 +5,7 @@ import {
   Input,
   Popconfirm,
   Segmented,
+  Select,
   Space,
   Spin,
 } from 'antd'
@@ -17,21 +18,24 @@ import {
 import { api } from '../../../api'
 import { navigate, tagFilterPath } from '../../../router'
 import { tagTone } from '../../../utils'
+import { useAppData } from '../../../shell/AppDataContext'
 import PageHeader from '../../../components/PageHeader'
 import EmptyState from '../../../components/EmptyState'
 
 export default function TagsPage() {
   const { message } = AntApp.useApp()
+  const { types } = useAppData()
   const [tags, setTags] = useState([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('count')
+  const [typeIds, setTypeIds] = useState([])
   const [cleaning, setCleaning] = useState(false)
 
   const loadTags = async (showSpinner = true) => {
     if (showSpinner) setLoading(true)
     try {
-      const data = await api.listTags({ sort: 'count' })
+      const data = await api.listTags({ sort: 'count', typeId: typeIds })
       setTags(data.tags)
     } catch (error) {
       message.error(error.message)
@@ -43,7 +47,7 @@ export default function TagsPage() {
   useEffect(() => {
     loadTags()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [typeIds])
 
   const visibleTags = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase()
@@ -135,6 +139,19 @@ export default function TagsPage() {
           prefix={<SearchOutlined className="input-prefix" />}
           placeholder="模糊搜索标签名称"
           className="tag-search"
+        />
+        <Select
+          mode="multiple"
+          allowClear
+          maxTagCount="responsive"
+          value={typeIds}
+          onChange={setTypeIds}
+          options={types.map((type) => ({
+            value: type.id,
+            label: type.name,
+          }))}
+          placeholder="全部记录类型"
+          className="tag-type-filter"
         />
         <Segmented
           value={sort}

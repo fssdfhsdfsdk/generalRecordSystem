@@ -70,12 +70,12 @@ export default function RecordsPage({ typeId }) {
 
   const loadTags = useCallback(async () => {
     try {
-      const data = await api.listTags({ sort: 'count' })
+      const data = await api.listTags({ sort: 'count', typeId })
       setTagOptions(data.tags)
     } catch (error) {
       message.error(error.message)
     }
-  }, [message])
+  }, [typeId, message])
 
   useEffect(() => {
     setSearchInput('')

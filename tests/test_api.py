@@ -345,6 +345,31 @@ class ApiTestCase(unittest.TestCase):
         status, data = self.request("GET", "/api/tags?q=py")
         self.assertEqual([tag["name"] for tag in data["tags"]], ["Python"])
 
+    def test_tag_list_can_be_limited_to_record_types(self):
+        first_type = self.create_type("标签类型一", ["内容"])
+        second_type = self.create_type("标签类型二", ["内容"])
+        self.create_record(first_type["id"], "一", {"内容": "a"}, ["共享", "独有A"])
+        self.create_record(second_type["id"], "二", {"内容": "b"}, ["共享", "独有B"])
+
+        status, data = self.request(
+            "GET", f"/api/tags?type_id={first_type['id']}"
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            {tag["name"]: tag["count"] for tag in data["tags"]},
+            {"共享": 1, "独有A": 1},
+        )
+
+        status, data = self.request(
+            "GET",
+            f"/api/tags?type_id={first_type['id']},{second_type['id']}",
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            {tag["name"]: tag["count"] for tag in data["tags"]},
+            {"共享": 2, "独有A": 1, "独有B": 1},
+        )
+
     def test_tag_and_filter_and_orphan_cleanup(self):
         record_type = self.create_type("标签筛选", ["内容"])
         both = self.create_record(record_type["id"], "两条都有", {"内容": "x"}, ["A", "B"])

@@ -77,10 +77,10 @@ export default function PlanListPage({
 
   useEffect(() => {
     planApi
-      .listTags({ sort: 'count' })
+      .listTags({ sort: 'count', type })
       .then((data) => setTagOptions(data.tags))
       .catch(() => setTagOptions([]))
-  }, [])
+  }, [type])
 
   useEffect(() => {
     let alive = true

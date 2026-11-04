@@ -5,6 +5,7 @@ import {
   Input,
   Popconfirm,
   Segmented,
+  Select,
   Space,
   Spin,
 } from 'antd'
@@ -17,6 +18,7 @@ import {
 import { planApi } from '../api'
 import { navigate } from '../../../router'
 import { tagTone } from '../../../utils'
+import { PLAN_TYPES } from '../planMeta'
 import PageHeader from '../../../components/PageHeader'
 import EmptyState from '../../../components/EmptyState'
 
@@ -26,12 +28,13 @@ export default function PlanTagsPage() {
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('count')
+  const [types, setTypes] = useState([])
   const [cleaning, setCleaning] = useState(false)
 
   const loadTags = async (showSpinner = true) => {
     if (showSpinner) setLoading(true)
     try {
-      const data = await planApi.listTags({ sort: 'count' })
+      const data = await planApi.listTags({ sort: 'count', type: types })
       setTags(data.tags)
     } catch (error) {
       message.error(error.message)
@@ -43,7 +46,7 @@ export default function PlanTagsPage() {
   useEffect(() => {
     loadTags()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [types])
 
   const visibleTags = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase()
@@ -133,6 +136,19 @@ export default function PlanTagsPage() {
           prefix={<SearchOutlined className="input-prefix" />}
           placeholder="模糊搜索计划标签"
           className="tag-search"
+        />
+        <Select
+          mode="multiple"
+          allowClear
+          maxTagCount="responsive"
+          value={types}
+          onChange={setTypes}
+          options={PLAN_TYPES.map((type) => ({
+            value: type.key,
+            label: type.label,
+          }))}
+          placeholder="全部计划类型"
+          className="tag-type-filter"
         />
         <Segmented
           value={sort}

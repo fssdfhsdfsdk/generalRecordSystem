@@ -55,9 +55,14 @@ export const api = {
     request(`/api/records/${id}`, { method: 'PUT', body: payload }),
   deleteRecord: (id) => request(`/api/records/${id}`, { method: 'DELETE' }),
 
-  listTags: ({ sort = 'count', q = '' } = {}) => {
+  listTags: ({ sort = 'count', q = '', typeId } = {}) => {
     const params = new URLSearchParams({ sort })
     if (q) params.set('q', q)
+    if (Array.isArray(typeId)) {
+      if (typeId.length) params.set('type_id', typeId.join(','))
+    } else if (typeId) {
+      params.set('type_id', typeId)
+    }
     return request(`/api/tags?${params.toString()}`)
   },
   cleanupTags: () => request('/api/tags/orphans', { method: 'DELETE' }),

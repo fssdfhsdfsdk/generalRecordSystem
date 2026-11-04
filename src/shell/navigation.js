@@ -44,7 +44,9 @@ export function pageTitle(segments, types = [], docTypes = []) {
   if (segments[0] === 'docs') {
     if (segments.length === 1) return '书籍与文档'
     if (segments[1] === 'types') return '文档类型管理'
-    if (segments[1] === 'tags') return '文档标签管理'
+    if (segments[1] === 'tags') {
+      return segments.length > 2 ? '文档标签筛选' : '文档标签管理'
+    }
     if (segments[1] === 'new') return '新建文档'
     if (segments[1] === 'type') {
       const type = docTypeFromSegments(segments, docTypes)
@@ -77,7 +79,13 @@ export function breadcrumb(segments, types = [], docTypes = []) {
   if (subsystem === 'docs') {
     if (segments.length === 1) return ['拾录', '书籍与文档', '文档总览']
     if (segments[1] === 'types') return ['拾录', '书籍与文档', '类型管理']
-    if (segments[1] === 'tags') return ['拾录', '书籍与文档', '标签管理']
+    if (segments[1] === 'tags') {
+      return [
+        '拾录',
+        '书籍与文档',
+        segments.length > 2 ? '文档标签筛选' : '标签管理',
+      ]
+    }
     if (segments[1] === 'type') {
       return ['拾录', '书籍与文档', pageTitle(segments, types, docTypes)]
     }

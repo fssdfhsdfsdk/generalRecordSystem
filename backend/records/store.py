@@ -499,21 +499,35 @@ def delete_record(conn: sqlite3.Connection, record_id: int) -> None:
         conn.execute("DELETE FROM records WHERE id = ?", (record_id,))
 
 
-def list_tags(conn: sqlite3.Connection, sort: str = "count", q: str = "") -> list[dict]:
-    where = ""
+def list_tags(
+    conn: sqlite3.Connection,
+    sort: str = "count",
+    q: str = "",
+    type_ids: list[int] | None = None,
+) -> list[dict]:
+    type_ids = list(dict.fromkeys(type_ids or []))
+    where: list[str] = []
     params: list = []
     if q:
-        where = "WHERE t.name LIKE ? ESCAPE '\\'"
+        where.append("t.name LIKE ? ESCAPE '\\'")
         params.append(like_pattern(q))
+    join = "LEFT JOIN record_tags rt ON rt.tag_id = t.id"
+    count_expr = "COUNT(rt.record_id)"
+    if type_ids:
+        placeholders = ",".join("?" for _ in type_ids)
+        join += " JOIN records r ON r.id = rt.record_id"
+        where.append(f"r.type_id IN ({placeholders})")
+        params.extend(type_ids)
+        count_expr = "COUNT(DISTINCT r.id)"
+    clause = (" WHERE " + " AND ".join(where)) if where else ""
     order = "t.name COLLATE NOCASE ASC"
     if sort == "count":
         order = "count DESC, t.name COLLATE NOCASE ASC"
     elif sort != "name":
         raise ApiError(400, "sort 参数必须是 name 或 count")
     rows = conn.execute(
-        "SELECT t.id, t.name, COUNT(rt.record_id) AS count FROM tags t "
-        "LEFT JOIN record_tags rt ON rt.tag_id = t.id "
-        f"{where} GROUP BY t.id ORDER BY {order}",
+        f"SELECT t.id, t.name, {count_expr} AS count FROM tags t "
+        f"{join}{clause} GROUP BY t.id ORDER BY {order}",
         params,
     ).fetchall()
     return [{"id": r["id"], "name": r["name"], "count": r["count"]} for r in rows]

@@ -556,6 +556,28 @@ class DocApiTestCase(unittest.TestCase):
         detail = self.request("GET", f"/api/docs/{first['id']}")[1]
         self.assertNotIn("Alpha", detail["tags"])
 
+    def test_tag_list_can_be_limited_to_document_types(self):
+        self.create_doc(
+            title="书", type_id=1, tags=["共享", "书籍标签"]
+        )
+        self.create_doc(
+            title="论文", type_id=2, tags=["共享", "论文标签"]
+        )
+
+        status, data = self.request("GET", "/api/docs/tags?type_id=1")
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            {tag["name"]: tag["count"] for tag in data["tags"]},
+            {"共享": 1, "书籍标签": 1},
+        )
+
+        status, data = self.request("GET", "/api/docs/tags?type_id=1,2")
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            {tag["name"]: tag["count"] for tag in data["tags"]},
+            {"共享": 2, "书籍标签": 1, "论文标签": 1},
+        )
+
     # -- stats / overview / isolation ------------------------------------
     def test_stats_overview_health_and_isolation(self):
         self.create_doc(title="阅读中", reading_status="reading", reading_progress=40)

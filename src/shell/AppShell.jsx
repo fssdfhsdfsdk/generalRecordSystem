@@ -14,7 +14,7 @@ import {
   SettingOutlined,
   TagsOutlined,
 } from '@ant-design/icons'
-import { navigate, useRoute } from '../router'
+import { navigate, parseTags, useRoute } from '../router'
 import { useAppData } from './AppDataContext'
 import {
   breadcrumb,
@@ -216,7 +216,19 @@ export default function AppShell() {
     if (route.segments[0] === 'docs') {
       if (route.segments.length === 1) return <DocsOverviewPage />
       if (route.segments[1] === 'types') return <DocTypesPage />
-      if (route.segments[1] === 'tags') return <DocTagsPage />
+      if (route.segments[1] === 'tags') {
+        if (route.segments.length > 2) {
+          const tagQuery = route.segments.slice(2).join('/')
+          return (
+            <DocListPage
+              key={`docs-tags:${tagQuery}`}
+              tagMode
+              initialTags={parseTags(tagQuery)}
+            />
+          )
+        }
+        return <DocTagsPage />
+      }
       if (route.segments[1] === 'new') {
         return (
           <DocEditPage
@@ -239,7 +251,13 @@ export default function AppShell() {
             </div>
           )
         }
-        return <DocListPage key={route.segments[2]} typeId={route.segments[2]} />
+        return (
+          <DocListPage
+            key={route.segments[2]}
+            typeId={route.segments[2]}
+            initialTags={parseTags(route.query.get('tags'))}
+          />
+        )
       }
       if (route.segments[2] === 'edit' && route.segments[1]) {
         return <DocEditPage key={route.segments[1]} documentId={route.segments[1]} />

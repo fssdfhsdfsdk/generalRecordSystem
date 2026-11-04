@@ -7,6 +7,7 @@ import {
   Modal,
   Popconfirm,
   Segmented,
+  Select,
   Space,
   Spin,
   Tooltip,
@@ -19,17 +20,21 @@ import {
   TagsOutlined,
 } from '@ant-design/icons'
 import { docApi } from '../api'
+import { navigate } from '../../../router'
 import { tagTone } from '../../../utils'
+import { useAppData } from '../../../shell/AppDataContext'
 import PageHeader from '../../../components/PageHeader'
 import EmptyState from '../../../components/EmptyState'
 import EllipsisText from '../../../components/EllipsisText'
 
 export default function DocTagsPage() {
   const { message } = AntApp.useApp()
+  const { docTypes } = useAppData()
   const [tags, setTags] = useState([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('count')
+  const [typeIds, setTypeIds] = useState([])
   const [cleaning, setCleaning] = useState(false)
   const [renameTarget, setRenameTarget] = useState(null)
   const [form] = Form.useForm()
@@ -38,7 +43,7 @@ export default function DocTagsPage() {
   const loadTags = async (showSpinner = true) => {
     if (showSpinner) setLoading(true)
     try {
-      const data = await docApi.listTags({ sort: 'count' })
+      const data = await docApi.listTags({ sort: 'count', type_id: typeIds })
       setTags(data.tags)
     } catch (error) {
       message.error(error.message)
@@ -50,7 +55,7 @@ export default function DocTagsPage() {
   useEffect(() => {
     loadTags()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [typeIds])
 
   const visibleTags = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase()
@@ -86,6 +91,11 @@ export default function DocTagsPage() {
     } finally {
       setCleaning(false)
     }
+  }
+
+  const filterByTag = (tag) => {
+    if (!tag.count) return
+    navigate(`/docs/tags/${encodeURIComponent(tag.name)}`)
   }
 
   const openRename = (tag) => {
@@ -177,6 +187,19 @@ export default function DocTagsPage() {
           placeholder="模糊搜索文档标签"
           className="tag-search"
         />
+        <Select
+          mode="multiple"
+          allowClear
+          maxTagCount="responsive"
+          value={typeIds}
+          onChange={setTypeIds}
+          options={docTypes.map((type) => ({
+            value: type.id,
+            label: type.name,
+          }))}
+          placeholder="全部文档类型"
+          className="tag-type-filter"
+        />
         <Segmented
           value={sort}
           onChange={setSort}
@@ -197,9 +220,22 @@ export default function DocTagsPage() {
           {visibleTags.map((tag) => (
             <div
               className={`doc-tag-card tag-tone-${tagTone(tag.name)} ${
-                tag.count ? '' : 'is-orphan'
+                tag.count ? 'is-clickable' : 'is-orphan'
               }`}
               key={tag.id}
+              role={tag.count ? 'button' : undefined}
+              tabIndex={tag.count ? 0 : undefined}
+              title={tag.count ? `筛选包含 #${tag.name} 的文档` : undefined}
+              onClick={() => filterByTag(tag)}
+              onKeyDown={(event) => {
+                if (
+                  tag.count &&
+                  (event.key === 'Enter' || event.key === ' ')
+                ) {
+                  event.preventDefault()
+                  filterByTag(tag)
+                }
+              }}
             >
               <div className="doc-tag-card-top">
                 <span className="doc-tag-card-hash">#</span>
@@ -210,7 +246,11 @@ export default function DocTagsPage() {
               </div>
               <div className="doc-tag-card-foot">
                 <span>{tag.count ? `${tag.count} 篇文档` : '暂未被使用'}</span>
-                <Space size={2}>
+                <Space
+                  size={2}
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
                   <Tooltip title="重命名">
                     <Button
                       type="text"

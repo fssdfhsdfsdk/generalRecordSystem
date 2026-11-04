@@ -16,6 +16,7 @@ import {
   ReloadOutlined,
 } from '@ant-design/icons'
 import { api } from '../../../api'
+import { navigate } from '../../../router'
 import { copyText } from '../../../clipboard'
 import { buildRecordMarkdown } from '../recordText'
 import { formatDate } from '../../../utils'
@@ -174,7 +175,16 @@ export default function RecordViewDrawer({
             />
             <div className="record-tag-row">
               {record.tags.length ? (
-                record.tags.map((tag) => <TagPill key={tag} name={tag} />)
+                record.tags.map((tag) => (
+                  <TagPill
+                    key={tag}
+                    name={tag}
+                    onClick={() => {
+                      onClose?.()
+                      navigate(`/tags/${encodeURIComponent(tag)}`)
+                    }}
+                  />
+                ))
               ) : (
                 <span className="muted-text">未添加标签</span>
               )}

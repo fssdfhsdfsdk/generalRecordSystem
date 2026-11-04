@@ -41,8 +41,8 @@ export const docApi = {
   removeHistory: (id, historyId) =>
     request(`/api/docs/${id}/history/${historyId}`, { method: 'DELETE' }),
 
-  listTags: ({ sort = 'count', q = '' } = {}) =>
-    request(`/api/docs/tags${queryString({ sort, q })}`),
+  listTags: ({ sort = 'count', q = '', type_id } = {}) =>
+    request(`/api/docs/tags${queryString({ sort, q, type_id })}`),
   renameTag: (id, payload) =>
     request(`/api/docs/tags/${id}`, { method: 'PUT', body: payload }),
   removeTag: (id) => request(`/api/docs/tags/${id}`, { method: 'DELETE' }),
