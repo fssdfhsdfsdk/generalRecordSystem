@@ -6,10 +6,12 @@ import {
   CalendarOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
+  GithubOutlined,
   PlusOutlined,
   ProjectOutlined,
   ReadOutlined,
   ThunderboltOutlined,
+  ToolOutlined,
 } from '@ant-design/icons'
 import { api } from '../api'
 import { navigate } from '../router'
@@ -48,6 +50,23 @@ const EMPTY = {
     recent: [],
     reading_now: [],
   },
+  repositories: {
+    total: 0,
+    tags: 0,
+    languages: 0,
+    resources: 0,
+    relations: 0,
+    recent: [],
+  },
+  tools: {
+    total: 0,
+    tags: 0,
+    platforms: 0,
+    open_source: 0,
+    resources: 0,
+    relations: 0,
+    recent: [],
+  },
 }
 
 export default function MainPage() {
@@ -77,6 +96,8 @@ export default function MainPage() {
   const records = data.records || EMPTY.records
   const plans = data.plans || EMPTY.plans
   const docs = data.docs || EMPTY.docs
+  const repositories = data.repositories || EMPTY.repositories
+  const tools = data.tools || EMPTY.tools
   const activePlans =
     (plans.by_status?.in_progress || 0) +
     (plans.by_status?.overdue || 0) +
@@ -89,7 +110,7 @@ export default function MainPage() {
         <div className="main-hero-glow main-hero-glow-b" />
         <div className="main-hero-copy">
           <span className="hero-kicker">
-            <ThunderboltOutlined /> 本地工作台 · 三库隔离 · 一个入口
+            <ThunderboltOutlined /> 本地工作台 · 五库隔离 · 一个入口
           </span>
           <h1>
             把记录收好，
@@ -98,8 +119,8 @@ export default function MainPage() {
           </h1>
           <p>
             通用记录保存事实、问答与根因；计划管理拆解目标、记录时间与进度；
-            书籍与文档管理收拢书、论文、文章、规范与办公材料，留住笔记、感想和阅读历史。
-            三个子系统各自拥有独立的数据文件，互不干扰。
+            书籍与文档管理收拢书、论文、文章、规范与办公材料；仓库管理与工具管理整理技术资源、
+            平台、标签和关联品。五个子系统各自拥有独立的数据文件，互不干扰。
           </p>
           <div className="main-hero-actions">
             <Button
@@ -125,6 +146,22 @@ export default function MainPage() {
               onClick={() => navigate('/docs')}
             >
               进入书籍与文档
+            </Button>
+            <Button
+              size="large"
+              className="hero-ghost-button hero-ghost-repos"
+              icon={<GithubOutlined />}
+              onClick={() => navigate('/repositories')}
+            >
+              进入仓库管理
+            </Button>
+            <Button
+              size="large"
+              className="hero-ghost-button hero-ghost-tools"
+              icon={<ToolOutlined />}
+              onClick={() => navigate('/tools')}
+            >
+              进入工具管理
             </Button>
           </div>
         </div>
@@ -155,6 +192,16 @@ export default function MainPage() {
                   <span>文档</span>
                   <strong>{docs.total}</strong>
                   <small>{docs.by_status?.reading || 0} 篇阅读中</small>
+                </div>
+                <div className="main-pulse-item">
+                  <span>仓库</span>
+                  <strong>{repositories.total}</strong>
+                  <small>{repositories.languages} 种编程语言</small>
+                </div>
+                <div className="main-pulse-item">
+                  <span>工具</span>
+                  <strong>{tools.total}</strong>
+                  <small>{tools.open_source} 个开源</small>
                 </div>
                 <div className="main-pulse-item">
                   <span>完成度</span>
@@ -278,6 +325,78 @@ export default function MainPage() {
             <span>笔记 / 感想</span>
           </div>
         </button>
+
+        <button
+          type="button"
+          className="subsystem-card subsystem-repositories"
+          onClick={() => navigate('/repositories')}
+        >
+          <div className="subsystem-card-top">
+            <span className="subsystem-icon">
+              <GithubOutlined />
+            </span>
+            <span className="subsystem-arrow">
+              <ArrowRightOutlined />
+            </span>
+          </div>
+          <div className="subsystem-kicker">REPOSITORY CATALOG</div>
+          <h2>仓库管理</h2>
+          <p>
+            收集代码仓库、开源项目与技术资源；编程语言、标签、资源地址和关联品一起维护。
+          </p>
+          <div className="subsystem-stats">
+            <span>
+              <strong>{repositories.total}</strong> 个仓库
+            </span>
+            <span>
+              <strong>{repositories.languages}</strong> 种语言
+            </span>
+            <span>
+              <strong>{repositories.tags}</strong> 个标签
+            </span>
+          </div>
+          <div className="subsystem-chips">
+            <span>资源地址</span>
+            <span>关联品</span>
+            <span>标签筛选</span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          className="subsystem-card subsystem-tools"
+          onClick={() => navigate('/tools')}
+        >
+          <div className="subsystem-card-top">
+            <span className="subsystem-icon">
+              <ToolOutlined />
+            </span>
+            <span className="subsystem-arrow">
+              <ArrowRightOutlined />
+            </span>
+          </div>
+          <div className="subsystem-kicker">TOOL CATALOG</div>
+          <h2>工具管理</h2>
+          <p>
+            管理开发与效率工具；开源状态、支持平台、标签、资源地址和关联品集中归档。
+          </p>
+          <div className="subsystem-stats">
+            <span>
+              <strong>{tools.total}</strong> 个工具
+            </span>
+            <span>
+              <strong>{tools.open_source}</strong> 个开源
+            </span>
+            <span>
+              <strong>{tools.platforms}</strong> 个平台
+            </span>
+          </div>
+          <div className="subsystem-chips">
+            <span>支持平台</span>
+            <span>开源标记</span>
+            <span>标签筛选</span>
+          </div>
+        </button>
       </section>
 
       <section className="main-stat-strip">
@@ -307,6 +426,20 @@ export default function MainPage() {
           <div>
             <span>完成阅读</span>
             <strong>{docs.by_status?.completed || 0}</strong>
+          </div>
+        </div>
+        <div className="main-stat">
+          <GithubOutlined />
+          <div>
+            <span>仓库总量</span>
+            <strong>{repositories.total}</strong>
+          </div>
+        </div>
+        <div className="main-stat">
+          <ToolOutlined />
+          <div>
+            <span>工具总量</span>
+            <strong>{tools.total}</strong>
           </div>
         </div>
       </section>

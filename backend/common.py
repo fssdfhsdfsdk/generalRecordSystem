@@ -14,6 +14,8 @@ DATA_DIR = ROOT / "data"
 DEFAULT_DB = DATA_DIR / "records.db"
 DEFAULT_PLAN_DB = DATA_DIR / "plans.db"
 DEFAULT_DOC_DB = DATA_DIR / "docs.db"
+DEFAULT_REPOSITORY_DB = DATA_DIR / "repository.db"
+DEFAULT_TOOLS_DB = DATA_DIR / "tools.db"
 
 MAX_BODY_BYTES = 4 * 1024 * 1024
 MAX_TITLE = 255

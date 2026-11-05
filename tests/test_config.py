@@ -53,6 +53,10 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEqual(cfg.records_db, (self.temp_dir / "data/records.db").resolve())
         self.assertEqual(cfg.plans_db, (self.temp_dir / "data/plans.db").resolve())
         self.assertEqual(cfg.docs_db, (self.temp_dir / "data/docs.db").resolve())
+        self.assertEqual(
+            cfg.repository_db, (self.temp_dir / "data/repository.db").resolve()
+        )
+        self.assertEqual(cfg.tools_db, (self.temp_dir / "data/tools.db").resolve())
         self.assertTrue(cfg.open_browser)
 
     def test_environment_overrides_file(self):
@@ -70,6 +74,8 @@ class ConfigTestCase(unittest.TestCase):
         records = (self.temp_dir / "env-records.db").resolve()
         plans = (self.temp_dir / "env-plans.db").resolve()
         docs = (self.temp_dir / "env-docs.db").resolve()
+        repositories = (self.temp_dir / "env-repository.db").resolve()
+        tools = (self.temp_dir / "env-tools.db").resolve()
         cfg = load_config(
             self.config_path,
             env={
@@ -78,6 +84,8 @@ class ConfigTestCase(unittest.TestCase):
                 "GRS_DB": f'"{records}"',
                 "GRS_PLAN_DB": str(plans),
                 "GRS_DOCS_DB": str(docs),
+                "GRS_REPOSITORY_DB": str(repositories),
+                "GRS_TOOLS_DB": str(tools),
                 "GRS_OPEN_BROWSER": "0",
                 "GRS_DEBUG": "yes",
             },
@@ -87,11 +95,15 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEqual(cfg.records_db, records)
         self.assertEqual(cfg.plans_db, plans)
         self.assertEqual(cfg.docs_db, docs)
+        self.assertEqual(cfg.repository_db, repositories)
+        self.assertEqual(cfg.tools_db, tools)
         self.assertFalse(cfg.open_browser)
         self.assertTrue(cfg.debug)
         self.assertIn("GRS_PORT", cfg.overrides)
         self.assertIn("GRS_DB", cfg.overrides)
         self.assertIn("GRS_DOCS_DB", cfg.overrides)
+        self.assertIn("GRS_REPOSITORY_DB", cfg.overrides)
+        self.assertIn("GRS_TOOLS_DB", cfg.overrides)
 
     def test_missing_default_config_uses_builtin_defaults(self):
         cfg = load_config(root=self.temp_dir, env={})
@@ -101,6 +113,10 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEqual(cfg.records_db, (self.temp_dir / "data/records.db").resolve())
         self.assertEqual(cfg.plans_db, (self.temp_dir / "data/plans.db").resolve())
         self.assertEqual(cfg.docs_db, (self.temp_dir / "data/docs.db").resolve())
+        self.assertEqual(
+            cfg.repository_db, (self.temp_dir / "data/repository.db").resolve()
+        )
+        self.assertEqual(cfg.tools_db, (self.temp_dir / "data/tools.db").resolve())
         self.assertTrue(cfg.open_browser)
         self.assertFalse(cfg.debug)
 

@@ -4,6 +4,8 @@
   "records_db": "data/records.db",
   "plans_db": "data/plans.db",
   "docs_db": "data/docs.db",
+  "repository_db": "data/repository.db",
+  "tools_db": "data/tools.db",
   "open_browser": true,
   "debug": false
 }

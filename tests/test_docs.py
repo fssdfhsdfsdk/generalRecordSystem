@@ -601,7 +601,16 @@ class DocApiTestCase(unittest.TestCase):
 
         status, health = self.request("GET", "/api/health")
         self.assertEqual(status, 200)
-        self.assertEqual(health["databases"], ["records.db", "plans.db", "docs.db"])
+        self.assertEqual(
+            health["databases"],
+            [
+                "records.db",
+                "plans.db",
+                "docs.db",
+                "repository.db",
+                "tools.db",
+            ],
+        )
         self.assertEqual(health["version"], "1.4.0")
 
         conn = server.connect(self.docs_db_path)

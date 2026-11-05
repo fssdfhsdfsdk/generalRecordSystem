@@ -145,7 +145,16 @@ class ApiTestCase(unittest.TestCase):
         status, data = self.request("GET", "/api/health")
         self.assertEqual(status, 200)
         self.assertEqual(data["status"], "ok")
-        self.assertEqual(data["databases"], ["records.db", "plans.db", "docs.db"])
+        self.assertEqual(
+            data["databases"],
+            [
+                "records.db",
+                "plans.db",
+                "docs.db",
+                "repository.db",
+                "tools.db",
+            ],
+        )
         self.assertEqual(data["version"], "1.4.0")
 
     # -- types -----------------------------------------------------------

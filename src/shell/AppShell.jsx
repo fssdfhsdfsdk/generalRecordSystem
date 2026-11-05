@@ -6,6 +6,7 @@ import {
   DatabaseOutlined,
   FileTextOutlined,
   FlagOutlined,
+  GithubOutlined,
   HomeOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -13,6 +14,7 @@ import {
   ReadOutlined,
   SettingOutlined,
   TagsOutlined,
+  ToolOutlined,
 } from '@ant-design/icons'
 import { navigate, parseTags, useRoute } from '../router'
 import { useAppData } from './AppDataContext'
@@ -41,8 +43,21 @@ import DocContentPage from '../subsystems/docs/pages/DocContentPage'
 import DocEditPage from '../subsystems/docs/pages/DocEditPage'
 import DocTypesPage from '../subsystems/docs/pages/DocTypesPage'
 import DocTagsPage from '../subsystems/docs/pages/DocTagsPage'
+import RepositoryListPage from '../subsystems/repositories/pages/RepositoryListPage'
+import RepositoryTagsPage from '../subsystems/repositories/pages/RepositoryTagsPage'
+import RepositoryLanguagesPage from '../subsystems/repositories/pages/RepositoryLanguagesPage'
+import ToolListPage from '../subsystems/tools/pages/ToolListPage'
+import ToolTagsPage from '../subsystems/tools/pages/ToolTagsPage'
+import ToolPlatformsPage from '../subsystems/tools/pages/ToolPlatformsPage'
 
 const { Sider, Header, Content } = Layout
+
+function parseListParam(value) {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
 
 export default function AppShell() {
   const route = useRoute()
@@ -74,6 +89,16 @@ export default function AppShell() {
       if (route.segments[1] === 'tags') return '/docs/tags'
       if (route.segments[1] === 'type') return `/docs/type/${route.segments[2]}`
       return '/docs'
+    }
+    if (route.segments[0] === 'repositories') {
+      if (route.segments[1] === 'languages') return '/repositories/languages'
+      if (route.segments[1] === 'tags') return '/repositories/tags'
+      return '/repositories'
+    }
+    if (route.segments[0] === 'tools') {
+      if (route.segments[1] === 'platforms') return '/tools/platforms'
+      if (route.segments[1] === 'tags') return '/tools/tags'
+      return '/tools'
     }
     return '/'
   }, [route.segments])
@@ -174,6 +199,48 @@ export default function AppShell() {
         label: '书籍与文档',
         children: docItems,
       })
+    } else if (subsystem === 'repositories') {
+      items.push({
+        key: 'repositories',
+        type: 'group',
+        label: '仓库管理',
+        children: [
+          {
+            key: '/repositories',
+            icon: <GithubOutlined />,
+            label: '仓库列表',
+          },
+          {
+            key: '/repositories/languages',
+            icon: <TagsOutlined />,
+            label: '编程语言管理',
+          },
+          {
+            key: '/repositories/tags',
+            icon: <TagsOutlined />,
+            label: '仓库标签管理',
+          },
+        ],
+      })
+    } else if (subsystem === 'tools') {
+      items.push({
+        key: 'tools',
+        type: 'group',
+        label: '工具管理',
+        children: [
+          { key: '/tools', icon: <ToolOutlined />, label: '工具列表' },
+          {
+            key: '/tools/platforms',
+            icon: <TagsOutlined />,
+            label: '支持平台管理',
+          },
+          {
+            key: '/tools/tags',
+            icon: <TagsOutlined />,
+            label: '工具标签管理',
+          },
+        ],
+      })
     } else {
       items.push({
         key: 'systems',
@@ -183,6 +250,12 @@ export default function AppShell() {
           { key: '/records', icon: <BookOutlined />, label: '通用记录' },
           { key: '/plans', icon: <CalendarOutlined />, label: '计划管理' },
           { key: '/docs', icon: <ReadOutlined />, label: '书籍与文档' },
+          {
+            key: '/repositories',
+            icon: <GithubOutlined />,
+            label: '仓库管理',
+          },
+          { key: '/tools', icon: <ToolOutlined />, label: '工具管理' },
         ],
       })
     }
@@ -212,6 +285,28 @@ export default function AppShell() {
       }
       const type = planTypeFromSegments(route.segments)
       if (type) return <PlanListPage key={type.key} type={type.key} />
+    }
+    if (route.segments[0] === 'repositories') {
+      if (route.segments[1] === 'languages') return <RepositoryLanguagesPage />
+      if (route.segments[1] === 'tags') return <RepositoryTagsPage />
+      return (
+        <RepositoryListPage
+          key={`repositories:${route.query.toString()}`}
+          initialTags={parseListParam(route.query.get('tags'))}
+          initialLanguages={parseListParam(route.query.get('languages'))}
+        />
+      )
+    }
+    if (route.segments[0] === 'tools') {
+      if (route.segments[1] === 'platforms') return <ToolPlatformsPage />
+      if (route.segments[1] === 'tags') return <ToolTagsPage />
+      return (
+        <ToolListPage
+          key={`tools:${route.query.toString()}`}
+          initialTags={parseListParam(route.query.get('tags'))}
+          initialPlatforms={parseListParam(route.query.get('platforms'))}
+        />
+      )
     }
     if (route.segments[0] === 'docs') {
       if (route.segments.length === 1) return <DocsOverviewPage />
@@ -312,7 +407,9 @@ export default function AppShell() {
             <span className="brand-mark">拾</span>
             <span className="brand-copy">
               <span className="brand-name">拾录</span>
-              <span className="brand-sub">RECORDS · PLANS · DOCS</span>
+              <span className="brand-sub">
+                RECORDS · PLANS · DOCS · REPOS · TOOLS
+              </span>
             </span>
           </button>
 
@@ -339,10 +436,10 @@ export default function AppShell() {
           <div className="sider-footer">
             <div className="sider-footer-row">
               <DatabaseOutlined />
-              <span>SQLite · 三库隔离</span>
+              <span>SQLite · 五库隔离</span>
             </div>
             <div className="sider-footer-meta">
-              records.db / plans.db / docs.db
+              records.db / plans.db / docs.db / repository.db / tools.db
             </div>
           </div>
         </div>
@@ -378,10 +475,10 @@ export default function AppShell() {
             </div>
           </div>
           <div className="header-right">
-            <Tooltip title="记录 data/records.db，计划 data/plans.db，文档 data/docs.db，三个库完全隔离">
+            <Tooltip title="records.db / plans.db / docs.db / repository.db / tools.db，五个数据库完全隔离">
               <span className="status-pill">
                 <span className="status-dot" />
-                三库隔离
+                五库隔离
               </span>
             </Tooltip>
           </div>

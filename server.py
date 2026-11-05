@@ -36,6 +36,8 @@ from backend.common import (  # noqa: F401 - compatibility re-exports
     DEFAULT_DB,
     DEFAULT_DOC_DB,
     DEFAULT_PLAN_DB,
+    DEFAULT_REPOSITORY_DB,
+    DEFAULT_TOOLS_DB,
     DIST_DIR,
     MAX_BODY_BYTES,
     ApiError,
@@ -47,6 +49,8 @@ from backend.config import ConfigError, load_config
 from backend.docs import store as docs_store
 from backend.plans import store as plans_store
 from backend.records import store as records_store
+from backend.repositories import store as repositories_store
+from backend.tools import store as tools_store
 
 # Kept for callers/tests that only need the records database.
 init_db = records_store.init_db
@@ -67,6 +71,8 @@ class Handler(BaseHTTPRequestHandler):
     db_path: Path = DEFAULT_DB
     plan_db_path: Path = DEFAULT_PLAN_DB
     docs_db_path: Path = DEFAULT_DOC_DB
+    repository_db_path: Path = DEFAULT_REPOSITORY_DB
+    tools_db_path: Path = DEFAULT_TOOLS_DB
     debug: bool = False
     protocol_version = "HTTP/1.1"
 
@@ -172,7 +178,13 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "status": "ok",
                     "version": APP_VERSION,
-                    "databases": ["records.db", "plans.db", "docs.db"],
+                    "databases": [
+                        "records.db",
+                        "plans.db",
+                        "docs.db",
+                        "repository.db",
+                        "tools.db",
+                    ],
                 }
             )
             return
@@ -184,11 +196,17 @@ class Handler(BaseHTTPRequestHandler):
                 plan_stats = plans_store.get_plan_stats(conn)
             with db_session(self.docs_db_path) as conn:
                 doc_stats = docs_store.get_doc_stats(conn)
+            with db_session(self.repository_db_path) as conn:
+                repository_stats = repositories_store.get_stats(conn)
+            with db_session(self.tools_db_path) as conn:
+                tool_stats = tools_store.get_stats(conn)
             self._send_json(
                 {
                     "records": record_stats,
                     "plans": plan_stats,
                     "docs": doc_stats,
+                    "repositories": repository_stats,
+                    "tools": tool_stats,
                 }
             )
             return
@@ -407,6 +425,220 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(result)
                 return
 
+        # -- repositories -----------------------------------------------------
+        if path == "/api/repositories/stats" and method == "GET":
+            with db_session(self.repository_db_path) as conn:
+                self._send_json(repositories_store.get_stats(conn))
+            return
+
+        if path == "/api/repositories/tags" and method == "GET":
+            with db_session(self.repository_db_path) as conn:
+                tags = repositories_store.list_tags(
+                    conn, q.get("sort", "count"), q.get("q", "")
+                )
+            self._send_json({"tags": tags, "total": len(tags)})
+            return
+        if path == "/api/repositories/tags" and method == "POST":
+            payload = self._read_json()
+            with db_session(self.repository_db_path) as conn:
+                result = repositories_store.create_tag(conn, payload)
+            self._send_json(result, 201)
+            return
+
+        if path == "/api/repositories/tags/orphans" and method == "DELETE":
+            with db_session(self.repository_db_path) as conn:
+                deleted = repositories_store.cleanup_orphan_tags(conn)
+            self._send_json({"deleted": deleted})
+            return
+
+        match = re.fullmatch(r"/api/repositories/tags/(\d+)", path)
+        if match:
+            tag_id = int(match.group(1))
+            if method == "PUT":
+                payload = self._read_json()
+                with db_session(self.repository_db_path) as conn:
+                    result = repositories_store.rename_tag(conn, tag_id, payload)
+                self._send_json(result)
+                return
+            if method == "DELETE":
+                with db_session(self.repository_db_path) as conn:
+                    repositories_store.delete_tag(conn, tag_id)
+                self._send_json({"deleted": True, "id": tag_id})
+                return
+
+        if path == "/api/repositories/languages" and method == "GET":
+            with db_session(self.repository_db_path) as conn:
+                languages = repositories_store.list_languages(
+                    conn, q.get("sort", "count"), q.get("q", "")
+                )
+            self._send_json({"languages": languages, "total": len(languages)})
+            return
+        if path == "/api/repositories/languages" and method == "POST":
+            payload = self._read_json()
+            with db_session(self.repository_db_path) as conn:
+                result = repositories_store.create_language(conn, payload)
+            self._send_json(result, 201)
+            return
+
+        match = re.fullmatch(r"/api/repositories/languages/(\d+)", path)
+        if match:
+            language_id = int(match.group(1))
+            if method == "PUT":
+                payload = self._read_json()
+                with db_session(self.repository_db_path) as conn:
+                    result = repositories_store.rename_language(
+                        conn, language_id, payload
+                    )
+                self._send_json(result)
+                return
+            if method == "DELETE":
+                with db_session(self.repository_db_path) as conn:
+                    repositories_store.delete_language(conn, language_id)
+                self._send_json({"deleted": True, "id": language_id})
+                return
+
+        if path == "/api/repositories":
+            if method == "GET":
+                with db_session(self.repository_db_path) as conn:
+                    repositories = repositories_store.list_repositories(conn, q)
+                self._send_json(
+                    {"repositories": repositories, "total": len(repositories)}
+                )
+                return
+            if method == "POST":
+                payload = self._read_json()
+                with db_session(self.repository_db_path) as conn:
+                    result = repositories_store.create_repository(conn, payload)
+                self._send_json(result, 201)
+                return
+
+        match = re.fullmatch(r"/api/repositories/(\d+)", path)
+        if match:
+            repository_id = int(match.group(1))
+            if method == "GET":
+                with db_session(self.repository_db_path) as conn:
+                    self._send_json(
+                        repositories_store.fetch_repository(conn, repository_id)
+                    )
+                return
+            if method == "PUT":
+                payload = self._read_json()
+                with db_session(self.repository_db_path) as conn:
+                    result = repositories_store.update_repository(
+                        conn, repository_id, payload
+                    )
+                self._send_json(result)
+                return
+            if method == "DELETE":
+                with db_session(self.repository_db_path) as conn:
+                    repositories_store.delete_repository(conn, repository_id)
+                self._send_json({"deleted": True, "id": repository_id})
+                return
+
+        # -- tools ------------------------------------------------------------
+        if path == "/api/tools/stats" and method == "GET":
+            with db_session(self.tools_db_path) as conn:
+                self._send_json(tools_store.get_stats(conn))
+            return
+
+        if path == "/api/tools/tags" and method == "GET":
+            with db_session(self.tools_db_path) as conn:
+                tags = tools_store.list_tags(
+                    conn, q.get("sort", "count"), q.get("q", "")
+                )
+            self._send_json({"tags": tags, "total": len(tags)})
+            return
+        if path == "/api/tools/tags" and method == "POST":
+            payload = self._read_json()
+            with db_session(self.tools_db_path) as conn:
+                result = tools_store.create_tag(conn, payload)
+            self._send_json(result, 201)
+            return
+
+        if path == "/api/tools/tags/orphans" and method == "DELETE":
+            with db_session(self.tools_db_path) as conn:
+                deleted = tools_store.cleanup_orphan_tags(conn)
+            self._send_json({"deleted": deleted})
+            return
+
+        match = re.fullmatch(r"/api/tools/tags/(\d+)", path)
+        if match:
+            tag_id = int(match.group(1))
+            if method == "PUT":
+                payload = self._read_json()
+                with db_session(self.tools_db_path) as conn:
+                    result = tools_store.rename_tag(conn, tag_id, payload)
+                self._send_json(result)
+                return
+            if method == "DELETE":
+                with db_session(self.tools_db_path) as conn:
+                    tools_store.delete_tag(conn, tag_id)
+                self._send_json({"deleted": True, "id": tag_id})
+                return
+
+        if path == "/api/tools/platforms" and method == "GET":
+            with db_session(self.tools_db_path) as conn:
+                platforms = tools_store.list_platforms(
+                    conn, q.get("sort", "count"), q.get("q", "")
+                )
+            self._send_json({"platforms": platforms, "total": len(platforms)})
+            return
+        if path == "/api/tools/platforms" and method == "POST":
+            payload = self._read_json()
+            with db_session(self.tools_db_path) as conn:
+                result = tools_store.create_platform(conn, payload)
+            self._send_json(result, 201)
+            return
+
+        match = re.fullmatch(r"/api/tools/platforms/(\d+)", path)
+        if match:
+            platform_id = int(match.group(1))
+            if method == "PUT":
+                payload = self._read_json()
+                with db_session(self.tools_db_path) as conn:
+                    result = tools_store.rename_platform(
+                        conn, platform_id, payload
+                    )
+                self._send_json(result)
+                return
+            if method == "DELETE":
+                with db_session(self.tools_db_path) as conn:
+                    tools_store.delete_platform(conn, platform_id)
+                self._send_json({"deleted": True, "id": platform_id})
+                return
+
+        if path == "/api/tools":
+            if method == "GET":
+                with db_session(self.tools_db_path) as conn:
+                    tools = tools_store.list_tools(conn, q)
+                self._send_json({"tools": tools, "total": len(tools)})
+                return
+            if method == "POST":
+                payload = self._read_json()
+                with db_session(self.tools_db_path) as conn:
+                    result = tools_store.create_tool(conn, payload)
+                self._send_json(result, 201)
+                return
+
+        match = re.fullmatch(r"/api/tools/(\d+)", path)
+        if match:
+            tool_id = int(match.group(1))
+            if method == "GET":
+                with db_session(self.tools_db_path) as conn:
+                    self._send_json(tools_store.fetch_tool(conn, tool_id))
+                return
+            if method == "PUT":
+                payload = self._read_json()
+                with db_session(self.tools_db_path) as conn:
+                    result = tools_store.update_tool(conn, tool_id, payload)
+                self._send_json(result)
+                return
+            if method == "DELETE":
+                with db_session(self.tools_db_path) as conn:
+                    tools_store.delete_tool(conn, tool_id)
+                self._send_json({"deleted": True, "id": tool_id})
+                return
+
         # -- plan management -------------------------------------------------
         if path == "/api/plans/tags" and method == "GET":
             types = _split_text_list(q.get("type"))
@@ -605,6 +837,8 @@ def make_handler(
     plan_db_path: Path,
     docs_db_path: Path = DEFAULT_DOC_DB,
     debug: bool = False,
+    repository_db_path: Path = DEFAULT_REPOSITORY_DB,
+    tools_db_path: Path = DEFAULT_TOOLS_DB,
 ):
     class BoundHandler(Handler):
         pass
@@ -612,6 +846,8 @@ def make_handler(
     BoundHandler.db_path = Path(db_path)
     BoundHandler.plan_db_path = Path(plan_db_path)
     BoundHandler.docs_db_path = Path(docs_db_path)
+    BoundHandler.repository_db_path = Path(repository_db_path)
+    BoundHandler.tools_db_path = Path(tools_db_path)
     BoundHandler.debug = debug
     return BoundHandler
 
@@ -640,6 +876,8 @@ def create_server(
     debug: bool = False,
     plan_db_path: Path | None = None,
     docs_db_path: Path | None = None,
+    repository_db_path: Path | None = None,
+    tools_db_path: Path | None = None,
 ) -> AppHTTPServer:
     db_path = Path(db_path)
     if plan_db_path is None:
@@ -648,16 +886,39 @@ def create_server(
     if docs_db_path is None:
         docs_db_path = db_path.parent / "docs.db"
     docs_db_path = Path(docs_db_path)
-    if len({db_path.resolve(), plan_db_path.resolve(), docs_db_path.resolve()}) != 3:
+    if repository_db_path is None:
+        repository_db_path = db_path.parent / "repository.db"
+    repository_db_path = Path(repository_db_path)
+    if tools_db_path is None:
+        tools_db_path = db_path.parent / "tools.db"
+    tools_db_path = Path(tools_db_path)
+    paths = {
+        db_path.resolve(),
+        plan_db_path.resolve(),
+        docs_db_path.resolve(),
+        repository_db_path.resolve(),
+        tools_db_path.resolve(),
+    }
+    if len(paths) != 5:
         raise ValueError(
-            "records.db, plans.db and docs.db must be three different files"
+            "records.db, plans.db, docs.db, repository.db and tools.db "
+            "must be five different files"
         )
     records_store.init_db(db_path)
     plans_store.init_db(plan_db_path)
     docs_store.init_db(docs_db_path)
+    repositories_store.init_db(repository_db_path)
+    tools_store.init_db(tools_db_path)
     server = AppHTTPServer(
         (host, port),
-        make_handler(db_path, plan_db_path, docs_db_path, debug),
+        make_handler(
+            db_path,
+            plan_db_path,
+            docs_db_path,
+            debug,
+            repository_db_path,
+            tools_db_path,
+        ),
     )
     return server
 
@@ -683,6 +944,14 @@ def main() -> int:
     )
     parser.add_argument(
         "--docs-db", default=None, help="docs SQLite path (default from config)"
+    )
+    parser.add_argument(
+        "--repository-db",
+        default=None,
+        help="repositories SQLite path (default from config)",
+    )
+    parser.add_argument(
+        "--tools-db", default=None, help="tools SQLite path (default from config)"
     )
     open_group = parser.add_mutually_exclusive_group()
     open_group.add_argument(
@@ -745,9 +1014,22 @@ def main() -> int:
         if args.docs_db is not None
         else cfg.docs_db
     )
-    if len({db_path, plan_db_path, docs_db_path}) != 3:
+    repository_db_path = (
+        Path(args.repository_db).expanduser().resolve()
+        if args.repository_db is not None
+        else cfg.repository_db
+    )
+    tools_db_path = (
+        Path(args.tools_db).expanduser().resolve()
+        if args.tools_db is not None
+        else cfg.tools_db
+    )
+    if len(
+        {db_path, plan_db_path, docs_db_path, repository_db_path, tools_db_path}
+    ) != 5:
         print(
-            "[ERROR] records, plans and docs must use three different database files."
+            "[ERROR] records, plans, docs, repository and tools must use "
+            "five different database files."
         )
         return 1
 
@@ -765,6 +1047,8 @@ def main() -> int:
             ("--db", args.db),
             ("--plan-db", args.plan_db),
             ("--docs-db", args.docs_db),
+            ("--repository-db", args.repository_db),
+            ("--tools-db", args.tools_db),
             ("--open/--no-open", args.open_browser),
             ("--debug", args.debug),
         )
@@ -774,7 +1058,14 @@ def main() -> int:
 
     try:
         httpd = create_server(
-            host, port, db_path, debug, plan_db_path, docs_db_path
+            host,
+            port,
+            db_path,
+            debug,
+            plan_db_path,
+            docs_db_path,
+            repository_db_path,
+            tools_db_path,
         )
     except ValueError as exc:
         print(f"[ERROR] Invalid database configuration: {exc}")
@@ -798,6 +1089,8 @@ def main() -> int:
     print(f"  Records  : {db_path}")
     print(f"  Plans    : {plan_db_path}")
     print(f"  Docs     : {docs_db_path}")
+    print(f"  Repos    : {repository_db_path}")
+    print(f"  Tools    : {tools_db_path}")
     print(f"  Browser  : {'open' if open_browser else 'manual'}")
     print("  Stop     : Ctrl+C")
     print("=" * 58)
