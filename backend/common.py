@@ -25,7 +25,7 @@ MAX_FIELDS = 30
 MAX_TAGS = 30
 MAX_LOG_TEXT = 10_000
 MAX_REASON = 1_000
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.5.0"
 
 _C = "\x00-\x08\x0b\x0c\x0e-\x1f"
 _CONTROL_CHARS = re.compile(rf"[{_C}]")

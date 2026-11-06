@@ -1,7 +1,7 @@
 {
   "name": "general-record-system",
   "private": true,
-  "version": "1.4.0",
+  "version": "1.5.0",
   "type": "module",
   "description": "A local workspace with records, plan management and a reading library, backed by three isolated SQLite databases.",
   "scripts": {

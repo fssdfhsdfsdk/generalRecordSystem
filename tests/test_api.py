@@ -155,7 +155,7 @@ class ApiTestCase(unittest.TestCase):
                 "tools.db",
             ],
         )
-        self.assertEqual(data["version"], "1.4.0")
+        self.assertEqual(data["version"], "1.5.0")
 
     # -- types -----------------------------------------------------------
     def test_create_type_and_duplicate_name(self):

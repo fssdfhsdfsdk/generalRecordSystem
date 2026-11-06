@@ -611,7 +611,7 @@ class DocApiTestCase(unittest.TestCase):
                 "tools.db",
             ],
         )
-        self.assertEqual(health["version"], "1.4.0")
+        self.assertEqual(health["version"], "1.5.0")
 
         conn = server.connect(self.docs_db_path)
         try:
