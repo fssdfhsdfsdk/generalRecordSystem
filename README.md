@@ -763,6 +763,21 @@ HTTPS_PROXY=http://127.0.0.1:7890
 - 也可以设置 `GRS_PROXY`，或在手动执行时传 `--proxy http://127.0.0.1:7890`。
 - 代理做了 TLS 拦截导致 `CERTIFICATE_VERIFY_FAILED` 时：把代理根证书导出为 PEM，设置 `SSL_CERT_FILE` 或传 `--ca-bundle`；仅在临时排障时用 `--insecure` / `GRS_INSECURE=1`。
 
+Windows 上如果报 `unable to get issuer certificate`，通常是 Python 的根证书库缺少 GitHub 经代理返回的证书链（Sectigo / USERTrust ECC）。直接使用 Git 自带的完整 CA 包：
+
+```dotenv
+# .env
+SSL_CERT_FILE=C:\Program Files\Git\mingw64\ssl\certs\ca-bundle.crt
+```
+
+或手动执行时指定：
+
+```powershell
+python scripts\publish_data_release.py --allow-public --ca-bundle "C:\Program Files\Git\mingw64\ssl\certs\ca-bundle.crt"
+```
+
+注意：通过 `npm run` 传含空格的路径会被拆开，建议直接用 `python` 调用，或把路径写进 `.env`。
+
 Git 自身也需要代理：
 
 ```powershell

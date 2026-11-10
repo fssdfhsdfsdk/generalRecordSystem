@@ -582,6 +582,15 @@ unable to get issuer certificate (_ssl.c:997)
    npm run publish:data -- --allow-public --ca-bundle C:\path\to\proxy-ca.pem
    ```
 
+   Windows 上常见的是 `unable to get issuer certificate`：GitHub 经代理返回 Sectigo / USERTrust ECC 链，而 Python 的 Windows 根证书库可能缺少该根。此时直接指向 Git 自带的完整 CA 包：
+
+   ```dotenv
+   # .env
+   SSL_CERT_FILE=C:\Program Files\Git\mingw64\ssl\certs\ca-bundle.crt
+   ```
+
+   注意 `npm run` 会拆分含空格的参数，手动执行时建议直接用 `python scripts\publish_data_release.py ...`。
+
 3. 仅临时排障可关闭校验：
 
    ```powershell

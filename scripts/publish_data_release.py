@@ -260,7 +260,19 @@ def api_request(method, url, token, data=None, headers=None, expected=(200,)):
             body,
         ) from exc
     except urllib.error.URLError as exc:
-        raise ReleaseError(f"{method} {url} failed: {exc.reason}") from exc
+        reason = exc.reason
+        text = str(reason)
+        if "CERTIFICATE_VERIFY_FAILED" in text or isinstance(
+            reason, ssl.SSLCertVerificationError
+        ):
+            raise ReleaseError(
+                f"{method} {url} failed: {reason}\n"
+                "提示：TLS 证书校验失败。经代理访问 GitHub 时，Python 可能缺少根证书。"
+                "可在 .env 设置 SSL_CERT_FILE，或使用 --ca-bundle；"
+                r"Windows 常用 CA 包：C:\Program Files\Git\mingw64\ssl\certs\ca-bundle.crt。"
+                "仅临时排障可用 --insecure。"
+            ) from exc
+        raise ReleaseError(f"{method} {url} failed: {reason}") from exc
 
 
 def get_repo_info(api, repo, token):
