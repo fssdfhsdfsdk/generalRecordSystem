@@ -724,7 +724,29 @@ npm run publish:data -- --allow-public --force     # 忽略“未变化”检查
 
 可选参数：`--keep 5`、`--repo owner/name`、`--data-dir data`、`--no-prune`。
 
-#### 5. 注意事项
+#### 5. 网络与代理
+
+钩子使用 Python 的 `urllib`，**不读取 Git 的 `http.proxy` 配置**，需要单独设置：
+
+```powershell
+setx HTTP_PROXY  "http://127.0.0.1:7890"
+setx HTTPS_PROXY "http://127.0.0.1:7890"
+```
+
+- `urllib` **不支持 `socks5://`**，请使用代理的 HTTP 端口（Clash 的 7890 通常是混合端口）。
+- 也可以设置 `GRS_PROXY`，或在手动执行时传 `--proxy http://127.0.0.1:7890`。
+- 代理做了 TLS 拦截导致 `CERTIFICATE_VERIFY_FAILED` 时：把代理根证书导出为 PEM，设置 `SSL_CERT_FILE` 或传 `--ca-bundle`；仅在临时排障时用 `--insecure` / `GRS_INSECURE=1`。
+
+Git 自身也需要代理：
+
+```powershell
+git config --global http.proxy  http://127.0.0.1:7890
+git config --global https.proxy http://127.0.0.1:7890
+```
+
+如果代理只提供 SOCKS 端口，Git 可以用 `socks5h://127.0.0.1:7890`，但 Python 脚本仍需 HTTP 端口。
+
+#### 6. 注意事项
 
 - 钩子只在**本地 `git push`** 时生效；GitHub 网页端提交、其他机器 push 都不会触发。
 - 只对 GitHub remote 生效；push 到其他 remote 会直接跳过。

@@ -312,6 +312,9 @@ dry-run 不会创建、上传、删除任何东西。
 | `--data-dir` | `data` | 快照目录，相对仓库根目录 |
 | `--repo` | `GRS_GITHUB_REPO` 或 `origin` | `owner/name` |
 | `--token` | 环境变量 | GitHub Token |
+| `--proxy` | `GRS_PROXY` / `HTTP_PROXY` | HTTP(S) 代理，例如 `http://127.0.0.1:7890` |
+| `--ca-bundle` | 系统默认 | 校验 GitHub 证书所用的 PEM CA 包 |
+| `--insecure` | 关闭 | 关闭 TLS 证书校验，仅临时排障 |
 | `--keep` | `5` | 保留的 `data-*` Release 数量，最小 1 |
 | `--api-url` | `https://api.github.com` | 便于 mock 测试/企业版 |
 | `--upload-url` | `https://uploads.github.com` | 资产上传域名 |
@@ -328,7 +331,9 @@ dry-run 不会创建、上传、删除任何东西。
 | `GRS_GITHUB_TOKEN` | 推荐。优先级最高 |
 | `GITHUB_TOKEN` / `GH_TOKEN` | 兼容常见命名 |
 | `GRS_GITHUB_REPO` | 目标仓库，`owner/name`；默认使用 `origin` |
+| `GRS_PROXY` | HTTP(S) 代理，例如 `http://127.0.0.1:7890` |
 | `GRS_ALLOW_PUBLIC_DATA_RELEASE=1` | 等价于 `--allow-public` |
+| `GRS_INSECURE=1` | 等价于 `--insecure`，仅临时排障 |
 
 Token 只放环境变量，**不写入仓库、不写入 `config.json`**。
 
@@ -529,7 +534,50 @@ GitHub Release 单个资产上限 2 GB。当前数据库远小于此，但若未
 
 ### 7.18 网络与代理
 
-`urllib` 会读取 `HTTP_PROXY` / `HTTPS_PROXY`。若公司网络需要代理，确保钩子运行时环境变量可见（GUI Git 客户端可能不继承终端环境）。
+`urllib` 会读取 `HTTP_PROXY` / `HTTPS_PROXY`，但**不读取 Git 的 `http.proxy`**，也**不支持 `socks5://`**。常见现象：
+
+```text
+warning: GET https://api.github.com/... failed:
+[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed:
+unable to get issuer certificate (_ssl.c:997)
+```
+
+处理顺序：
+
+1. 使用代理的 **HTTP 端口**（Clash 的 7890 通常是 HTTP/SOCKS 混合端口）：
+
+   ```powershell
+   setx HTTP_PROXY  "http://127.0.0.1:7890"
+   setx HTTPS_PROXY "http://127.0.0.1:7890"
+   # 或
+   setx GRS_PROXY "http://127.0.0.1:7890"
+   ```
+
+2. 若代理做了 TLS 拦截，Python 不信任代理根证书：
+
+   ```powershell
+   # 导出代理 CA 为 PEM 后
+   setx SSL_CERT_FILE "C:\path\to\proxy-ca.pem"
+   # 或手动执行时
+   npm run publish:data -- --allow-public --ca-bundle C:\path\to\proxy-ca.pem
+   ```
+
+3. 仅临时排障可关闭校验：
+
+   ```powershell
+   setx GRS_INSECURE "1"
+   ```
+
+   `--insecure` 会打印警告，不应长期使用。
+
+另外，Git 自身也要配代理，否则 `git push` 会报 `Recv failure: Connection was reset`：
+
+```powershell
+git config --global http.proxy  http://127.0.0.1:7890
+git config --global https.proxy http://127.0.0.1:7890
+```
+
+GUI Git 客户端可能不继承终端环境变量，建议同时用 `git config --global` 配置。
 
 ### 7.19 钩子不随 clone 传播
 

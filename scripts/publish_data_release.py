@@ -16,6 +16,7 @@ import argparse
 import hashlib
 import json
 import os
+import ssl
 import subprocess
 import sys
 import urllib.error
@@ -212,6 +213,40 @@ def get_repo_info(api, repo, token):
     return api_request("GET", f"{api}/repos/{repo}", token)
 
 
+def configure_network(args):
+    """Apply optional proxy / TLS settings before the first API request."""
+    proxy = (args.proxy or os.environ.get("GRS_PROXY") or "").strip()
+    if proxy.startswith("socks"):
+        raise ReleaseError(
+            "urllib 不支持 SOCKS 代理。请改用代理的 HTTP 端口，"
+            "例如 http://127.0.0.1:7890（Clash 的 7890 通常是混合端口），"
+            "或设置 GRS_PROXY。"
+        )
+
+    handlers = []
+    if proxy:
+        handlers.append(
+            urllib.request.ProxyHandler({"http": proxy, "https": proxy})
+        )
+
+    insecure = args.insecure or os.environ.get("GRS_INSECURE") == "1"
+    if insecure:
+        warn("TLS 证书校验已关闭（--insecure / GRS_INSECURE=1），仅用于临时排障")
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        handlers.append(urllib.request.HTTPSHandler(context=context))
+    elif args.ca_bundle:
+        try:
+            context = ssl.create_default_context(cafile=args.ca_bundle)
+        except (OSError, ssl.SSLError) as exc:
+            raise ReleaseError(f"无法加载 CA 证书 {args.ca_bundle}: {exc}") from exc
+        handlers.append(urllib.request.HTTPSHandler(context=context))
+
+    if handlers:
+        urllib.request.install_opener(urllib.request.build_opener(*handlers))
+
+
 def list_releases(api, repo, token):
     releases = []
     page = 1
@@ -403,6 +438,24 @@ def parse_args():
         help="GitHub token (default: GRS_GITHUB_TOKEN, GITHUB_TOKEN or GH_TOKEN)",
     )
     parser.add_argument(
+        "--proxy",
+        default=None,
+        help=(
+            "HTTP(S) proxy, e.g. http://127.0.0.1:7890 "
+            "(default: GRS_PROXY, then HTTP_PROXY / HTTPS_PROXY)"
+        ),
+    )
+    parser.add_argument(
+        "--ca-bundle",
+        default=None,
+        help="PEM CA bundle used to verify GitHub TLS certificates",
+    )
+    parser.add_argument(
+        "--insecure",
+        action="store_true",
+        help="disable TLS certificate verification (temporary troubleshooting only)",
+    )
+    parser.add_argument(
         "--keep",
         type=int,
         default=DEFAULT_KEEP,
@@ -479,6 +532,7 @@ def main():
     repo = repo.strip()
     if repo.endswith(".git"):
         repo = repo[:-4]
+    configure_network(args)
     api = args.api_url.rstrip("/")
     uploads = args.upload_url.rstrip("/")
 
