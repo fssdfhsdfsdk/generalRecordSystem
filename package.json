@@ -1,0 +1,29 @@
+{
+  "name": "general-record-system",
+  "private": true,
+  "version": "1.5.0",
+  "type": "module",
+  "description": "A local workspace with records, plan management and a reading library, backed by three isolated SQLite databases.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "backend": "python server.py"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^5.5.1",
+    "antd": "^5.22.2",
+    "dayjs": "^1.11.13",
+    "katex": "^0.16.47",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.0.1",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.0",
+    "remark-math": "^6.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.3",
+    "vite": "^5.4.10"
+  }
+}
