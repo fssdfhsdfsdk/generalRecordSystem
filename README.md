@@ -401,6 +401,7 @@ start.bat
 .
 ├─ server.py                    # HTTP 路由、静态托管、启动入口
 ├─ config.json                  # 启动配置：端口、五个数据库、浏览器、调试
+├─ .env.example                 # 数据发布配置模板（复制为 .env，.env 不入库）
 ├─ backend/
 │  ├─ common.py                 # 路径、校验、SQLite session
 │  ├─ config.py                 # config.json + GRS_* 覆盖与校验
@@ -680,13 +681,30 @@ python -m unittest discover -s tests -v
 
 #### 1. 准备 Token
 
-创建 Fine-grained PAT，目标仓库授予 **Contents: Read and write** 权限，然后设置环境变量：
+创建 Fine-grained PAT，目标仓库授予 **Contents: Read and write** 权限。
+
+推荐把配置放在仓库根目录的 `.env`（已被 `.gitignore` 忽略，不会提交）：
+
+```powershell
+Copy-Item .env.example .env
+notepad .env
+```
+
+```dotenv
+GRS_GITHUB_TOKEN=github_pat_xxx
+HTTP_PROXY=http://127.0.0.1:7890
+HTTPS_PROXY=http://127.0.0.1:7890
+```
+
+也可以使用环境变量：
 
 ```powershell
 setx GRS_GITHUB_TOKEN "github_pat_xxx"
 ```
 
-重新打开终端后生效。也支持 `GITHUB_TOKEN` / `GH_TOKEN`。Token 只放在环境变量中，不要写入仓库或 `config.json`。
+优先级：**命令行参数 > 真实环境变量 > `.env` > 默认值**。`setx` 后需要重新打开终端；`.env` 修改后下次运行即生效。
+
+Token 只放在 `.env` 或环境变量中，不要写入仓库或 `config.json`。`.env` 不会被提交。
 
 #### 2. 安装钩子
 
@@ -726,12 +744,20 @@ npm run publish:data -- --allow-public --force     # 忽略“未变化”检查
 
 #### 5. 网络与代理
 
-钩子使用 Python 的 `urllib`，**不读取 Git 的 `http.proxy` 配置**，需要单独设置：
+钩子使用 Python 的 `urllib`，**不读取 Git 的 `http.proxy` 配置**，需要在 `.env` 或环境变量中单独设置：
 
 ```powershell
 setx HTTP_PROXY  "http://127.0.0.1:7890"
 setx HTTPS_PROXY "http://127.0.0.1:7890"
 ```
+
+```dotenv
+# .env 中同样可以写
+HTTP_PROXY=http://127.0.0.1:7890
+HTTPS_PROXY=http://127.0.0.1:7890
+```
+
+`.env` 与 `setx` 二选一即可；同时存在时真实环境变量优先。
 
 - `urllib` **不支持 `socks5://`**，请使用代理的 HTTP 端口（Clash 的 7890 通常是混合端口）。
 - 也可以设置 `GRS_PROXY`，或在手动执行时传 `--proxy http://127.0.0.1:7890`。

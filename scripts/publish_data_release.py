@@ -30,6 +30,8 @@ MANIFEST_MARKER = "data-manifest-sha256:"
 DEFAULT_KEEP = 5
 DEFAULT_API = "https://api.github.com"
 DEFAULT_UPLOADS = "https://uploads.github.com"
+TOKEN_ENV_NAMES = ("GRS_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN")
+PROXY_ENV_NAMES = ("GRS_PROXY", "HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy")
 
 
 class ReleaseError(RuntimeError):
@@ -95,11 +97,63 @@ def detect_repo(root):
 
 
 def detect_token():
-    for name in ("GRS_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"):
+    for name in TOKEN_ENV_NAMES:
         value = os.environ.get(name)
         if value and value.strip():
             return value.strip()
     return ""
+
+
+def parse_env_file(path):
+    """Parse a minimal KEY=VALUE file. Returns a dict; never raises on content."""
+    values = {}
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except OSError as exc:
+        warn(f"could not read {path}: {exc}")
+        return values
+
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].lstrip()
+        key, sep, value = line.partition("=")
+        if not sep:
+            continue
+        key = key.strip()
+        value = value.strip()
+        if not key or key[0].isdigit() or not key.replace("_", "").isalnum():
+            continue
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        else:
+            value = value.split(" #", 1)[0].rstrip()
+        values[key] = value
+    return values
+
+
+def apply_env_file(path):
+    """Load defaults from a .env file. Real environment variables always win."""
+    values = parse_env_file(path)
+    if not values:
+        return 0
+
+    real_token = any(os.environ.get(name, "").strip() for name in TOKEN_ENV_NAMES)
+    real_proxy = any(os.environ.get(name, "").strip() for name in PROXY_ENV_NAMES)
+
+    applied = 0
+    for key, value in values.items():
+        if key in os.environ:
+            continue
+        if real_token and key in TOKEN_ENV_NAMES:
+            continue
+        if real_proxy and key in PROXY_ENV_NAMES:
+            continue
+        os.environ[key] = value
+        applied += 1
+    return applied
 
 
 def collect_files(data_dir):
@@ -438,6 +492,14 @@ def parse_args():
         help="GitHub token (default: GRS_GITHUB_TOKEN, GITHUB_TOKEN or GH_TOKEN)",
     )
     parser.add_argument(
+        "--env-file",
+        default=".env",
+        help=(
+            "load KEY=VALUE defaults from this file, relative to the repository "
+            "root (default: .env). Real environment variables take precedence."
+        ),
+    )
+    parser.add_argument(
         "--proxy",
         default=None,
         help=(
@@ -505,6 +567,12 @@ def parse_args():
 def main():
     args = parse_args()
     root = repo_root()
+    if args.env_file:
+        env_path = Path(args.env_file)
+        if not env_path.is_absolute():
+            env_path = root / env_path
+        if env_path.is_file():
+            apply_env_file(env_path)
     data_dir = Path(args.data_dir)
     if not data_dir.is_absolute():
         data_dir = root / data_dir
@@ -515,7 +583,8 @@ def main():
     if args.dry_run and not (args.token or detect_token()):
         print_manifest(files, fingerprint)
         log(
-            "dry-run: no GitHub token; configure GRS_GITHUB_TOKEN to check remote state",
+            "dry-run: no GitHub token; configure GRS_GITHUB_TOKEN in .env "
+            "or the environment to check remote state",
             args.quiet,
         )
         return 0
@@ -523,9 +592,9 @@ def main():
     token = args.token or detect_token()
     if not token:
         raise ReleaseError(
-            "未找到 GitHub Token。请设置 GRS_GITHUB_TOKEN（推荐）或 "
-            "GITHUB_TOKEN / GH_TOKEN；Fine-grained PAT 需要目标仓库的 "
-            "Contents: Read and write 权限。"
+            "未找到 GitHub Token。请在仓库根目录的 .env 中设置 GRS_GITHUB_TOKEN，"
+            "或设置同名环境变量（GITHUB_TOKEN / GH_TOKEN 也可）；"
+            "Fine-grained PAT 需要目标仓库的 Contents: Read and write 权限。"
         )
 
     repo = args.repo or detect_repo(root)

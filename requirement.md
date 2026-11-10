@@ -1033,6 +1033,7 @@ IR-38～IR-41 均满足。仓库与工具子系统各自拥有独立数据库、
 | 发布方式 | 当前仓库的 GitHub Releases，标签 `data-<UTC时间>-<短SHA>`；`make_latest=false`，不抢占产品最新 Release |
 | 历史保留 | 默认保留最近 5 个 `data-*` Release，删除更早的 Release 及其标签 |
 | 数据公开 | 当前仓库为公开仓库，钩子显式传入 `--allow-public`；手动执行同样需要显式允许 |
+| 配置来源 | 命令行参数 > 真实环境变量 > 仓库根目录 `.env` > 默认值；`.env` 被 `.gitignore` 排除 |
 | 手动命令 | `npm run publish:data -- --dry-run --allow-public` / `npm run publish:data -- --allow-public --force` |
 | 安装命令 | `npm run install:hooks` |
 | 实现入口 | `scripts/publish_data_release.py`、`scripts/git-hooks/pre-push`、`scripts/install_git_hooks.ps1` |

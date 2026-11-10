@@ -311,6 +311,7 @@ dry-run 不会创建、上传、删除任何东西。
 | --- | --- | --- |
 | `--data-dir` | `data` | 快照目录，相对仓库根目录 |
 | `--repo` | `GRS_GITHUB_REPO` 或 `origin` | `owner/name` |
+| `--env-file` | `.env` | 从该文件读取默认值；真实环境变量优先 |
 | `--token` | 环境变量 | GitHub Token |
 | `--proxy` | `GRS_PROXY` / `HTTP_PROXY` | HTTP(S) 代理，例如 `http://127.0.0.1:7890` |
 | `--ca-bundle` | 系统默认 | 校验 GitHub 证书所用的 PEM CA 包 |
@@ -338,6 +339,25 @@ dry-run 不会创建、上传、删除任何东西。
 Token 只放环境变量，**不写入仓库、不写入 `config.json`**。
 
 Fine-grained PAT 需要目标仓库的 **Contents: Read and write**。
+
+#### 6.2.1 `.env` 本地配置
+
+仓库根目录的 `.env` 用于存放本地私密配置，模板为 `.env.example`。优先级：
+
+```text
+命令行参数 > 真实环境变量 > .env > 内置默认值
+```
+
+实现要点（`parse_env_file` / `apply_env_file`）：
+
+- 只把 `.env` 中**尚未存在**的键写入 `os.environ`；
+- 如果真实环境里已有任一 token（`GRS_GITHUB_TOKEN` / `GITHUB_TOKEN` / `GH_TOKEN`），`.env` 中的 token 全部不生效；
+- 如果真实环境里已有任一代理（`GRS_PROXY` / `HTTP_PROXY` / `HTTPS_PROXY` 及小写形式），`.env` 中的代理全部不生效；
+- 支持 `KEY=VALUE`、`export KEY=VALUE`、单/双引号、行尾 ` #` 注释；
+- 使用 `utf-8-sig` 读取，兼容带 BOM 的文件；
+- 文件缺失或格式错误不会中断发布，只跳过对应行。
+
+`.env` 已加入 `.gitignore`，不会进入 Git 历史。
 
 ### 6.3 退出码
 
@@ -591,6 +611,13 @@ npm run install:hooks
 
 `--quiet` 只输出告警与错误；Token 从未被打印。正文中只包含文件哈希，不包含数据库内容。
 
+### 7.21 `.env` 不是保险箱
+
+- `.env` 已被 `.gitignore` 忽略，但**不要**把它复制进 `dist/`、备份压缩包或聊天记录；
+- 误提交后要立即在 GitHub 撤销该 Token，再清理历史；
+- 脚本不会打印 Token，也不会把它写进 Release 正文；
+- 用 UTF-8 保存；即使带 BOM 也能读取，但不要用 UTF-16。
+
 ---
 
 ## 8. 验证记录
@@ -662,9 +689,15 @@ npm run build
 
 ```powershell
 # 1. 创建 Fine-grained PAT，授权当前仓库 Contents: Read and write
-setx GRS_GITHUB_TOKEN "github_pat_xxx"
+Copy-Item .env.example .env
+notepad .env
 
-# 2. 重开终端
+# .env 内容示例
+# GRS_GITHUB_TOKEN=github_pat_xxx
+# HTTP_PROXY=http://127.0.0.1:7890
+# HTTPS_PROXY=http://127.0.0.1:7890
+
+# 2. 安装钩子并演练
 npm run install:hooks
 npm run publish:data -- --dry-run --allow-public
 ```
@@ -732,6 +765,8 @@ Remove-Item .git\hooks\pre-push
 | `scripts/git-hooks/pre-push` | 新增，替换原 `post-commit` |
 | `scripts/install_git_hooks.ps1` | 安装 `pre-push`，移除旧 `post-commit` |
 | `.gitattributes` | 新增，锁定钩子脚本 LF |
+| `.gitignore` | 忽略 `.env` / `.env.*`，保留 `.env.example` |
+| `.env.example` | 新增，数据发布配置模板 |
 | `package.json` | 新增 `install:hooks`、`publish:data` |
 | `README.md` | 新增「GitHub Releases 自动快照（push 时）」章节与目录结构说明 |
 | `requirement.md` | 新增第 16 节「运维自动化」 |
