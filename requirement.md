@@ -1023,6 +1023,24 @@ IR-38～IR-41 均满足。仓库与工具子系统各自拥有独立数据库、
 
 ---
 
+## 16. 运维自动化：data 目录 GitHub Releases 快照
+
+| 项目 | 说明 |
+| --- | --- |
+| 触发方式 | 本地 `post-commit` 钩子；每次本地 commit 后执行 |
+| 数据范围 | `data/` 下全部文件（含 SQLite `-wal` / `-shm`，如存在） |
+| 变化检测 | 路径 + 大小 + SHA-256 组成内容指纹；与最近 `data-*` Release 的 `data-manifest-sha256` 比较，相同则跳过 |
+| 发布方式 | GitHub Releases，标签 `data-<UTC时间>-<短SHA>`；`make_latest=false`，不抢占产品最新 Release |
+| 历史保留 | 默认保留最近 5 个 `data-*` Release，删除更早的 Release 及其标签 |
+| 安全策略 | 公开仓库默认拒绝上传；需改为私有仓库或使用私有数据仓库，或显式 `--allow-public` |
+| 手动命令 | `npm run publish:data -- --dry-run` / `npm run publish:data -- --force` |
+| 安装命令 | `npm run install:hooks` |
+| 实现入口 | `scripts/publish_data_release.py`、`scripts/git-hooks/post-commit`、`scripts/install_git_hooks.ps1` |
+
+注意：钩子只对本地 commit 生效；GitHub 网页端提交不会触发。服务运行时 WAL/SHM 可能持续变化，需要稳定快照时先停止服务再 commit。
+
+---
+
 ## 附录 A：实现对照速查
 
 | 需求主题 | 代码入口 |

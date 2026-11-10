@@ -1,0 +1,17 @@
+#!/bin/sh
+# Publish a data/ snapshot to GitHub Releases after each local commit.
+# Installed by scripts/install_git_hooks.ps1. Failures never block the commit.
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+script="$repo_root/scripts/publish_data_release.py"
+[ -f "$script" ] || exit 0
+
+if command -v python >/dev/null 2>&1; then
+  python "$script" --quiet
+elif command -v py >/dev/null 2>&1; then
+  py -3 "$script" --quiet
+else
+  echo "warning: python not found; data snapshot not published" >&2
+fi
+
+exit 0

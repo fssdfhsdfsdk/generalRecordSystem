@@ -1,0 +1,4 @@
+# Git hook entry points must keep LF endings: Git for Windows would otherwise
+# check them out as CRLF and the #!/bin/sh shebang would break.
+scripts/git-hooks/* text eol=lf
+*.sh text eol=lf

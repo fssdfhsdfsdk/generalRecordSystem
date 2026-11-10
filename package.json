@@ -8,7 +8,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "backend": "python server.py"
+    "backend": "python server.py",
+    "install:hooks": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install_git_hooks.ps1",
+    "publish:data": "python scripts/publish_data_release.py"
   },
   "dependencies": {
     "@ant-design/icons": "^5.5.1",

@@ -431,6 +431,10 @@ start.bat
 │  ├─ test_repositories.py      # 仓库管理 4 项测试
 │  ├─ test_tools.py             # 工具管理 4 项测试
 │  └─ test_config.py            # 启动配置 8 项测试
+├─ scripts/
+│  ├─ publish_data_release.py   # data/ 快照上传到 GitHub Releases
+│  ├─ install_git_hooks.ps1     # 安装 post-commit 钩子
+│  └─ git-hooks/post-commit     # 本地 commit 后自动发布
 ├─ docs/screenshots/            # 桌面与移动端截图
 ├─ requirement.md               # 需求、风险、建模、派生需求、资格策略
 ├─ bug-tracks.md                # 开发缺陷记录
@@ -653,7 +657,7 @@ python -m unittest discover -s tests -v
 - **0 条应用 console error**
 - v1.4 的文档子系统回归基线保留：新建/编辑/删除文档、笔记与感想保存、阅读历史默认折叠与展开、类型与标签管理
 - v1.2 的计划/记录浏览器回归基线保留
-- 生产构建 3,387 modules；JS 约 1.93 MB，CSS 约 116 KB；KaTeX 仅输出 woff2，字体约 250 KB
+- 生产构建 3,389 modules；JS 约 1.93 MB，CSS 约 116 KB；KaTeX 仅输出 woff2，字体约 250 KB
 
 ## 数据、备份与恢复
 
@@ -666,6 +670,67 @@ python -m unittest discover -s tests -v
 - 备份：停止服务后复制整个 `data/` 目录；至少同时复制五个 `.db` 及其 `.db-wal`、`.db-shm`。
 - 恢复：停止服务，用备份覆盖对应文件，再启动。
 - 删除类型、字段、计划、节点、文档、仓库、工具或标签会永久删除关联内容；执行前建议备份。文档类型下仍有文档时，系统会拒绝删除类型。
+
+### GitHub Releases 自动快照
+
+`data/` 在 `.gitignore` 中，数据库不会进入 Git 历史。项目使用本地 `post-commit` 钩子，在每次本地 commit 后把 `data/` 下的**全部文件**上传到 GitHub Releases；只有数据内容指纹变化时才创建新 Release，并始终保留最近 5 个 `data-*` Release。
+
+> **安全警告：** 当前仓库 `fssdfhsdfsdk/generalRecordSystem` 是**公开仓库**，Release 资产对所有人可见。数据库包含个人记录，脚本默认会拒绝向公开仓库上传。请先把仓库改为私有，或使用一个**私有数据仓库**（推荐）：
+>
+> ```powershell
+> setx GRS_GITHUB_REPO "your-name/private-data-repo"
+> ```
+>
+> 如果确实要上传到公开仓库，必须显式传入 `--allow-public` 或设置 `GRS_ALLOW_PUBLIC_DATA_RELEASE=1`。
+>
+> 私有数据仓库需要至少有一个提交（例如一个空的 `README.md`），否则 GitHub 无法创建 Release 标签。
+
+#### 1. 准备 Token
+
+创建一个 Fine-grained PAT，目标仓库（代码仓库或私有数据仓库）授予 **Contents: Read and write** 权限，然后设置环境变量：
+
+```powershell
+setx GRS_GITHUB_TOKEN "github_pat_xxx"
+```
+
+重新打开终端后生效。也支持 `GITHUB_TOKEN` / `GH_TOKEN`。Token 只放在环境变量中，不要写入仓库或 `config.json`。
+
+#### 2. 安装钩子
+
+```powershell
+npm run install:hooks
+```
+
+安装脚本会备份已有的 `.git/hooks/post-commit`，再把 `scripts/git-hooks/post-commit` 复制过去。
+
+#### 3. 工作方式
+
+每次本地 `git commit` 后，钩子会：
+
+1. 计算 `data/` 下所有文件的内容指纹（路径 + 大小 + SHA-256）；
+2. 与最近一个 `data-*` Release 正文中的 `data-manifest-sha256` 比较；
+3. 指纹相同则直接跳过，不创建新 Release；
+4. 指纹不同则创建 `data-<UTC时间>-<短SHA>` Release，上传全部文件；
+5. 删除第 6 个及更早的 `data-*` Release 及其 Git 标签。
+
+Release 正文记录本地提交 SHA、分支、文件清单与数据指纹。上传发生在 commit 之后、push 之前；如果当前分支尚未推送到远端，Release 标签会回退到远端默认分支。数据 Release 使用 `make_latest=false`，不会抢占产品 Release 的 Latest 标记，可在 Releases 页面按 `data-` 标签查找。
+
+#### 4. 手动执行
+
+```powershell
+npm run publish:data -- --dry-run   # 只显示指纹和将要做的事
+npm run publish:data                # 有变化才发布
+npm run publish:data -- --force     # 忽略“未变化”检查，强制发布
+```
+
+可选参数：`--keep 5`、`--repo owner/name`、`--data-dir data`、`--no-prune`、`--allow-public`。
+
+#### 5. 注意事项
+
+- 钩子只对**本地 commit** 生效；GitHub 网页端提交不会触发。
+- 服务运行时 SQLite 的 `-wal` / `-shm` 会持续变化，可能产生更频繁的快照；需要稳定快照时先停止服务再 commit。
+- Release 资产单文件上限为 2 GB；当前数据库远小于该限制。
+- 如果不需要自动发布，删除 `.git/hooks/post-commit` 即可（本安装脚本不使用 `core.hooksPath`）。
 
 ## 已知边界
 
