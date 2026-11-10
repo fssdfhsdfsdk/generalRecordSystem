@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Publish a snapshot of data/ to GitHub Releases after a local commit.
+"""Publish a snapshot of data/ to GitHub Releases when pushing to GitHub.
 
-The data/ directory is intentionally ignored by git. This script runs from a
-post-commit hook on the developer machine, uploads every file under data/ to a
-GitHub Release, and keeps only the newest N data-* releases (default: 5).
+The data/ directory is intentionally ignored by git, so it never reaches the
+remote and GitHub Actions cannot see it. This script runs from a pre-push hook
+on the developer machine, uploads every file under data/ to a GitHub Release,
+and keeps only the newest N data-* releases (default: 5).
 
 Only a content fingerprint is compared: if the files are byte-for-byte the same
 as the latest data-* release, no new release is created.
@@ -351,7 +352,7 @@ def upload_asset(uploads, repo, token, release_id, item, payload):
 
 def build_body(sha, subject, branch, files, fingerprint):
     lines = [
-        "数据目录自动快照（本地 post-commit 钩子）。",
+        "数据目录自动快照（本地 pre-push 钩子，`git push` 时触发）。",
         "",
         f"- 提交：`{sha}` {subject}",
         f"- 分支：{branch or 'detached HEAD'}",
