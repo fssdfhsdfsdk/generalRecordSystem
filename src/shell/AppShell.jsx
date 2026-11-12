@@ -4,6 +4,7 @@ import {
   BookOutlined,
   CalendarOutlined,
   DatabaseOutlined,
+  EditOutlined,
   FileTextOutlined,
   FlagOutlined,
   GithubOutlined,
@@ -44,6 +45,9 @@ import DocContentPage from '../subsystems/docs/pages/DocContentPage'
 import DocEditPage from '../subsystems/docs/pages/DocEditPage'
 import DocTypesPage from '../subsystems/docs/pages/DocTypesPage'
 import DocTagsPage from '../subsystems/docs/pages/DocTagsPage'
+import NotesListPage from '../subsystems/docs/pages/NotesListPage'
+import NoteTagsPage from '../subsystems/docs/pages/NoteTagsPage'
+import NoteTypesPage from '../subsystems/docs/pages/NoteTypesPage'
 import RepositoryListPage from '../subsystems/repositories/pages/RepositoryListPage'
 import RepositoryTagsPage from '../subsystems/repositories/pages/RepositoryTagsPage'
 import RepositoryLanguagesPage from '../subsystems/repositories/pages/RepositoryLanguagesPage'
@@ -95,6 +99,12 @@ export default function AppShell() {
       return '/plans'
     }
     if (route.segments[0] === 'docs') {
+      if (route.segments[1] === 'notes') {
+        if (route.segments[2] === 'types') return '/docs/notes/types'
+        if (route.segments[2] === 'tag-search') return '/docs/notes/tag-search'
+        if (route.segments[2] === 'tags') return '/docs/notes/tags'
+        return '/docs/notes'
+      }
       if (route.segments[1] === 'types') return '/docs/types'
       if (route.segments[1] === 'tag-search') return '/docs/tag-search'
       if (route.segments[1] === 'tags') return '/docs/tags'
@@ -222,6 +232,29 @@ export default function AppShell() {
         type: 'group',
         label: '书籍与文档',
         children: docItems,
+      })
+      items.push({
+        key: 'doc-notes',
+        type: 'group',
+        label: '笔记管理',
+        children: [
+          { key: '/docs/notes', icon: <EditOutlined />, label: '笔记列表' },
+          {
+            key: '/docs/notes/tags',
+            icon: <TagsOutlined />,
+            label: '笔记标签',
+          },
+          {
+            key: '/docs/notes/tag-search',
+            icon: <TagsOutlined />,
+            label: '标签模糊搜索',
+          },
+          {
+            key: '/docs/notes/types',
+            icon: <SettingOutlined />,
+            label: '类型管理',
+          },
+        ],
       })
     } else if (subsystem === 'repositories') {
       items.push({
@@ -381,6 +414,38 @@ export default function AppShell() {
     }
     if (route.segments[0] === 'docs') {
       if (route.segments.length === 1) return <DocsOverviewPage />
+      if (route.segments[1] === 'notes') {
+        if (route.segments[2] === 'types') return <NoteTypesPage />
+        if (route.segments[2] === 'tag-search') {
+          const fuzzyQuery = route.segments.slice(3).join('/')
+          return (
+            <NotesListPage
+              key={`docs-notes-tag-search:${fuzzyQuery}`}
+              fuzzyTagMode
+              initialTagQ={fuzzyQuery}
+            />
+          )
+        }
+        if (route.segments[2] === 'tags') {
+          if (route.segments.length > 3) {
+            const tagQuery = route.segments.slice(3).join('/')
+            return (
+              <NotesListPage
+                key={`docs-notes-tags:${tagQuery}`}
+                tagMode
+                initialTags={parseTags(tagQuery)}
+              />
+            )
+          }
+          return <NoteTagsPage />
+        }
+        return (
+          <NotesListPage
+            key={`docs-notes:${route.query.toString()}`}
+            initialDocId={route.query.get('doc_id')}
+          />
+        )
+      }
       if (route.segments[1] === 'types') return <DocTypesPage />
       if (route.segments[1] === 'tag-search') {
         const fuzzyQuery = route.segments.slice(2).join('/')

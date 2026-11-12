@@ -133,6 +133,10 @@ class DocApiTestCase(unittest.TestCase):
                 "doc_tags",
                 "doc_tag_links",
                 "doc_reading_history",
+                "note_types",
+                "book_notes",
+                "note_tags",
+                "note_tag_links",
             },
         )
         self.assertTrue(

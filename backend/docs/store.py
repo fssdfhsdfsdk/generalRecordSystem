@@ -21,6 +21,7 @@ from ..common import (
     connect,
     ensure_order,
     like_pattern,
+    normalize_tag,
     now_text,
     optional_text,
     parse_datetime_text,
@@ -39,6 +40,9 @@ MAX_DOC_INFO = 1_000
 MAX_TYPE_DESCRIPTION = 500
 MAX_HISTORY_DESCRIPTION = 2_000
 MAX_HISTORIES = 100
+MAX_NOTE_CHAPTER = 255
+MAX_NOTE_SECTION = 255
+MAX_NOTE_PREVIEW = 200
 
 DEFAULT_DOC_TYPES = (
     (
@@ -66,6 +70,13 @@ DEFAULT_DOC_TYPES = (
         "business",
         "商业报告、方案、合同、流程与办公材料。",
     ),
+)
+
+DEFAULT_NOTE_TYPES = (
+    ("摘录", "书中的原文片段、关键句与值得反复读的段落。"),
+    ("注释", "对原文术语、背景、上下文的解释与补充。"),
+    ("想法", "阅读时产生的理解、联想、评价与延伸思考。"),
+    ("疑问", "阅读中尚未解决的问题、待查证的内容与后续线索。"),
 )
 
 SCHEMA_SQL = """
@@ -125,12 +136,51 @@ CREATE TABLE IF NOT EXISTS doc_reading_history (
     updated_at     TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS note_types (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    description TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS book_notes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    doc_id     INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    type_id    INTEGER NOT NULL REFERENCES note_types(id) ON DELETE RESTRICT,
+    title      TEXT NOT NULL,
+    chapter    TEXT NOT NULL DEFAULT '',
+    section    TEXT NOT NULL DEFAULT '',
+    note_time  TEXT,
+    excerpt    TEXT NOT NULL DEFAULT '',
+    content    TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS note_tags (
+    id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS note_tag_links (
+    note_id INTEGER NOT NULL REFERENCES book_notes(id) ON DELETE CASCADE,
+    tag_id  INTEGER NOT NULL REFERENCES note_tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (note_id, tag_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(type_id);
 CREATE INDEX IF NOT EXISTS idx_documents_updated ON documents(updated_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(reading_status, priority);
 CREATE INDEX IF NOT EXISTS idx_doc_tag_links_tag ON doc_tag_links(tag_id);
 CREATE INDEX IF NOT EXISTS idx_doc_history_document
     ON doc_reading_history(document_id, start_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_book_notes_doc
+    ON book_notes(doc_id, updated_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_book_notes_type
+    ON book_notes(type_id, updated_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_book_notes_updated
+    ON book_notes(updated_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_note_tag_links_tag ON note_tag_links(tag_id);
 """
 
 
@@ -143,7 +193,8 @@ def init_db(db_path: Path) -> None:
         conn.executescript(SCHEMA_SQL)
 
         conn.execute(
-            "INSERT OR IGNORE INTO app_meta(key, value) VALUES('schema_version', '2')"
+            "INSERT INTO app_meta(key, value) VALUES('schema_version', '3') "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
         )
         seeded = conn.execute(
             "SELECT value FROM app_meta WHERE key = 'seed_version'"
@@ -164,6 +215,20 @@ def init_db(db_path: Path) -> None:
                 )
             conn.execute(
                 "INSERT INTO app_meta(key, value) VALUES('seed_version', '1')"
+            )
+        note_seeded = conn.execute(
+            "SELECT value FROM app_meta WHERE key = 'note_seed_version'"
+        ).fetchone()
+        if note_seeded is None:
+            stamp = now_text()
+            for name, description in DEFAULT_NOTE_TYPES:
+                conn.execute(
+                    "INSERT OR IGNORE INTO note_types(name, description, created_at) "
+                    "VALUES(?, ?, ?)",
+                    (name, description, stamp),
+                )
+            conn.execute(
+                "INSERT INTO app_meta(key, value) VALUES('note_seed_version', '1')"
             )
         conn.commit()
     finally:
@@ -563,7 +628,9 @@ def fetch_document(conn: sqlite3.Connection, document_id: int) -> dict:
         "       (SELECT COUNT(*) FROM doc_reading_history h "
         "        WHERE h.document_id = d.id) AS history_count, "
         "       (SELECT COALESCE(SUM(h.duration_hours), 0) "
-        "        FROM doc_reading_history h WHERE h.document_id = d.id) AS total_hours "
+        "        FROM doc_reading_history h WHERE h.document_id = d.id) AS total_hours, "
+        "       (SELECT COUNT(*) FROM book_notes n WHERE n.doc_id = d.id) "
+        "       AS note_count "
         "FROM documents d JOIN doc_types t ON t.id = d.type_id "
         "WHERE d.id = ?",
         (document_id,),
@@ -585,6 +652,7 @@ def fetch_document(conn: sqlite3.Connection, document_id: int) -> dict:
             "reading_notes": row["reading_notes"],
             "reading_reflections": row["reading_reflections"],
             "histories": [_history_payload(item) for item in histories],
+            "note_count": row["note_count"],
         }
     )
     return result
@@ -1017,6 +1085,492 @@ def cleanup_orphan_doc_tags(conn: sqlite3.Connection) -> int:
         cur = conn.execute(
             "DELETE FROM doc_tags WHERE id NOT IN "
             "(SELECT DISTINCT tag_id FROM doc_tag_links)"
+        )
+    return cur.rowcount
+
+
+# ---------------------------------------------------------------------------
+# Note types
+# ---------------------------------------------------------------------------
+
+
+def _note_type_payload(row: sqlite3.Row) -> dict:
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "description": row["description"],
+        "created_at": row["created_at"],
+        "note_count": row["note_count"],
+    }
+
+
+def fetch_note_type(conn: sqlite3.Connection, type_id: int) -> dict:
+    row = conn.execute(
+        "SELECT t.id, t.name, t.description, t.created_at, "
+        "       (SELECT COUNT(*) FROM book_notes n WHERE n.type_id = t.id) "
+        "       AS note_count "
+        "FROM note_types t WHERE t.id = ?",
+        (type_id,),
+    ).fetchone()
+    if row is None:
+        raise ApiError(404, "笔记类型不存在", "not_found")
+    return _note_type_payload(row)
+
+
+def list_note_types(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT t.id, t.name, t.description, t.created_at, "
+        "       (SELECT COUNT(*) FROM book_notes n WHERE n.type_id = t.id) "
+        "       AS note_count "
+        "FROM note_types t ORDER BY t.id"
+    ).fetchall()
+    return [_note_type_payload(row) for row in rows]
+
+
+def create_note_type(conn: sqlite3.Connection, payload: dict) -> dict:
+    name = clean_text(payload.get("name"), "类型名称", MAX_NAME)
+    description = optional_text(
+        payload.get("description", ""), "类型描述", MAX_TYPE_DESCRIPTION
+    )
+    try:
+        with conn:
+            cur = conn.execute(
+                "INSERT INTO note_types(name, description, created_at) "
+                "VALUES(?, ?, ?)",
+                (name, description, now_text()),
+            )
+            type_id = cur.lastrowid
+    except sqlite3.IntegrityError:
+        raise ApiError(409, f"笔记类型已存在：{name}", "conflict") from None
+    return fetch_note_type(conn, type_id)
+
+
+def update_note_type(
+    conn: sqlite3.Connection, type_id: int, payload: dict
+) -> dict:
+    existing = fetch_note_type(conn, type_id)
+    name = (
+        clean_text(payload.get("name"), "类型名称", MAX_NAME)
+        if "name" in payload
+        else existing["name"]
+    )
+    description = (
+        optional_text(payload.get("description"), "类型描述", MAX_TYPE_DESCRIPTION)
+        if "description" in payload
+        else existing["description"]
+    )
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE note_types SET name = ?, description = ? WHERE id = ?",
+                (name, description, type_id),
+            )
+    except sqlite3.IntegrityError:
+        raise ApiError(409, f"笔记类型已存在：{name}", "conflict") from None
+    return fetch_note_type(conn, type_id)
+
+
+def delete_note_type(conn: sqlite3.Connection, type_id: int) -> None:
+    existing = fetch_note_type(conn, type_id)
+    if existing["note_count"]:
+        raise ApiError(
+            409,
+            f"该类型下还有 {existing['note_count']} 条笔记，"
+            "请先移动或删除这些笔记",
+            "conflict",
+        )
+    with conn:
+        conn.execute("DELETE FROM note_types WHERE id = ?", (type_id,))
+
+
+# ---------------------------------------------------------------------------
+# Notes
+# ---------------------------------------------------------------------------
+
+
+def _note_tags_map(
+    conn: sqlite3.Connection, note_ids: list[int]
+) -> dict[int, list[str]]:
+    if not note_ids:
+        return {}
+    placeholders = ",".join("?" for _ in note_ids)
+    rows = conn.execute(
+        f"SELECT nl.note_id, t.name FROM note_tag_links nl "
+        f"JOIN note_tags t ON t.id = nl.tag_id "
+        f"WHERE nl.note_id IN ({placeholders}) "
+        f"ORDER BY t.name COLLATE NOCASE",
+        note_ids,
+    ).fetchall()
+    result: dict[int, list[str]] = {note_id: [] for note_id in note_ids}
+    for row in rows:
+        result[row["note_id"]].append(row["name"])
+    return result
+
+
+def _note_summary_payload(row: sqlite3.Row, tags: list[str]) -> dict:
+    excerpt_length = row["excerpt_length"] or 0
+    content_length = row["content_length"] or 0
+    return {
+        "id": row["id"],
+        "doc_id": row["doc_id"],
+        "doc_title": row["doc_title"],
+        "doc_type_id": row["doc_type_id"],
+        "doc_type_name": row["doc_type_name"],
+        "title": row["title"],
+        "chapter": row["chapter"],
+        "section": row["section"],
+        "note_time": row["note_time"],
+        "type_id": row["type_id"],
+        "type_name": row["note_type_name"],
+        "excerpt_preview": row["excerpt_preview"] or "",
+        "excerpt_length": excerpt_length,
+        "excerpt_truncated": excerpt_length > MAX_NOTE_PREVIEW,
+        "content_preview": row["content_preview"] or "",
+        "content_length": content_length,
+        "content_truncated": content_length > MAX_NOTE_PREVIEW,
+        "tags": tags,
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def list_notes(conn: sqlite3.Connection, query: dict) -> list[dict]:
+    where: list[str] = []
+    params: list = []
+
+    doc_id_raw = (query.get("doc_id") or "").strip()
+    if doc_id_raw:
+        doc_id = as_int(doc_id_raw, "doc_id")
+        row = conn.execute(
+            "SELECT id FROM documents WHERE id = ?", (doc_id,)
+        ).fetchone()
+        if row is None:
+            raise ApiError(404, "文档不存在", "not_found")
+        where.append("n.doc_id = ?")
+        params.append(doc_id)
+
+    type_raw = (query.get("type_id") or "").strip()
+    if type_raw:
+        type_ids = [
+            as_int(part, "type_id") for part in type_raw.split(",") if part.strip()
+        ]
+        type_ids = list(dict.fromkeys(type_ids))
+        for type_id in type_ids:
+            fetch_note_type(conn, type_id)
+        placeholders = ",".join("?" for _ in type_ids)
+        where.append(f"n.type_id IN ({placeholders})")
+        params.extend(type_ids)
+
+    q = (query.get("q") or "").strip()
+    if q:
+        where.append("n.title LIKE ? ESCAPE '\\'")
+        params.append(like_pattern(q))
+
+    for tag in parse_tag_filter(query.get("tags")):
+        where.append(
+            "EXISTS (SELECT 1 FROM note_tag_links nl "
+            "JOIN note_tags t ON t.id = nl.tag_id "
+            "WHERE nl.note_id = n.id AND t.name = ? COLLATE NOCASE)"
+        )
+        params.append(tag)
+
+    for keyword in parse_tag_filter(query.get("tag_q")):
+        where.append(
+            "EXISTS (SELECT 1 FROM note_tag_links nl "
+            "JOIN note_tags t ON t.id = nl.tag_id "
+            "WHERE nl.note_id = n.id AND t.name LIKE ? ESCAPE '\\')"
+        )
+        params.append(like_pattern(keyword))
+
+    order = {
+        "updated_desc": "n.updated_at DESC, n.id DESC",
+        "created_desc": "n.created_at DESC, n.id DESC",
+        "time_desc": "(n.note_time IS NULL), n.note_time DESC, n.id DESC",
+        "title_asc": "n.title COLLATE NOCASE ASC, n.id DESC",
+    }.get(query.get("sort") or "updated_desc")
+    if order is None:
+        raise ApiError(400, "sort 参数不合法")
+
+    limit = query.get("limit") or 500
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        raise ApiError(400, "limit 必须是正整数") from None
+    if limit < 1 or limit > 1_000:
+        raise ApiError(400, "limit 必须在 1–1000 之间")
+
+    clause = (" WHERE " + " AND ".join(where)) if where else ""
+    rows = conn.execute(
+        "SELECT n.id, n.doc_id, d.title AS doc_title, d.type_id AS doc_type_id, "
+        "       dt.name AS doc_type_name, n.title, n.chapter, n.section, "
+        "       n.note_time, n.type_id, nt.name AS note_type_name, "
+        f"       SUBSTR(n.excerpt, 1, {MAX_NOTE_PREVIEW}) AS excerpt_preview, "
+        "       LENGTH(n.excerpt) AS excerpt_length, "
+        f"       SUBSTR(n.content, 1, {MAX_NOTE_PREVIEW}) AS content_preview, "
+        "       LENGTH(n.content) AS content_length, "
+        "       n.created_at, n.updated_at "
+        "FROM book_notes n "
+        "JOIN documents d ON d.id = n.doc_id "
+        "JOIN doc_types dt ON dt.id = d.type_id "
+        "JOIN note_types nt ON nt.id = n.type_id"
+        + clause
+        + f" ORDER BY {order} LIMIT ?",
+        [*params, limit],
+    ).fetchall()
+    tag_map = _note_tags_map(conn, [row["id"] for row in rows])
+    return [
+        _note_summary_payload(row, tag_map.get(row["id"], [])) for row in rows
+    ]
+
+
+def fetch_note(conn: sqlite3.Connection, note_id: int) -> dict:
+    row = conn.execute(
+        "SELECT n.id, n.doc_id, d.title AS doc_title, d.type_id AS doc_type_id, "
+        "       dt.name AS doc_type_name, n.title, n.chapter, n.section, "
+        "       n.note_time, n.type_id, nt.name AS note_type_name, "
+        "       n.excerpt, n.content, n.created_at, n.updated_at "
+        "FROM book_notes n "
+        "JOIN documents d ON d.id = n.doc_id "
+        "JOIN doc_types dt ON dt.id = d.type_id "
+        "JOIN note_types nt ON nt.id = n.type_id "
+        "WHERE n.id = ?",
+        (note_id,),
+    ).fetchone()
+    if row is None:
+        raise ApiError(404, "笔记不存在", "not_found")
+    tags = _note_tags_map(conn, [note_id]).get(note_id, [])
+    return {
+        "id": row["id"],
+        "doc_id": row["doc_id"],
+        "doc_title": row["doc_title"],
+        "doc_type_id": row["doc_type_id"],
+        "doc_type_name": row["doc_type_name"],
+        "title": row["title"],
+        "chapter": row["chapter"],
+        "section": row["section"],
+        "note_time": row["note_time"],
+        "type_id": row["type_id"],
+        "type_name": row["note_type_name"],
+        "excerpt": row["excerpt"],
+        "content": row["content"],
+        "excerpt_length": len(row["excerpt"] or ""),
+        "content_length": len(row["content"] or ""),
+        "tags": tags,
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def _set_note_tags(
+    conn: sqlite3.Connection, note_id: int, tags: list[str]
+) -> None:
+    conn.execute("DELETE FROM note_tag_links WHERE note_id = ?", (note_id,))
+    for tag in tags:
+        conn.execute("INSERT OR IGNORE INTO note_tags(name) VALUES(?)", (tag,))
+        row = conn.execute(
+            "SELECT id FROM note_tags WHERE name = ? COLLATE NOCASE", (tag,)
+        ).fetchone()
+        if row is None:  # pragma: no cover - INSERT OR IGNORE guarantees it
+            continue
+        conn.execute(
+            "INSERT OR IGNORE INTO note_tag_links(note_id, tag_id) VALUES(?, ?)",
+            (note_id, row["id"]),
+        )
+
+
+def create_note(conn: sqlite3.Connection, payload: dict) -> dict:
+    doc_id = as_int(payload.get("doc_id"), "doc_id")
+    row = conn.execute(
+        "SELECT id FROM documents WHERE id = ?", (doc_id,)
+    ).fetchone()
+    if row is None:
+        raise ApiError(404, "文档不存在", "not_found")
+    type_id = as_int(payload.get("type_id"), "type_id")
+    fetch_note_type(conn, type_id)
+    title = clean_text(payload.get("title"), "笔记标题", MAX_TITLE)
+    chapter = optional_text(payload.get("chapter", ""), "章节", MAX_NOTE_CHAPTER)
+    section = optional_text(payload.get("section", ""), "小节", MAX_NOTE_SECTION)
+    note_time = parse_datetime_text(payload.get("note_time"), "笔记时间")
+    excerpt = optional_text(payload.get("excerpt", ""), "原文片段", MAX_FIELD_VALUE)
+    content = optional_text(payload.get("content", ""), "笔记内容", MAX_FIELD_VALUE)
+    tags = unique_tags(payload.get("tags", []))
+
+    stamp = now_text()
+    with conn:
+        cur = conn.execute(
+            "INSERT INTO book_notes(doc_id, type_id, title, chapter, section, "
+            "note_time, excerpt, content, created_at, updated_at) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                doc_id,
+                type_id,
+                title,
+                chapter,
+                section,
+                note_time,
+                excerpt,
+                content,
+                stamp,
+                stamp,
+            ),
+        )
+        note_id = cur.lastrowid
+        _set_note_tags(conn, note_id, tags)
+    return fetch_note(conn, note_id)
+
+
+def update_note(conn: sqlite3.Connection, note_id: int, payload: dict) -> dict:
+    existing = fetch_note(conn, note_id)
+    doc_id = (
+        as_int(payload.get("doc_id"), "doc_id")
+        if "doc_id" in payload
+        else existing["doc_id"]
+    )
+    row = conn.execute(
+        "SELECT id FROM documents WHERE id = ?", (doc_id,)
+    ).fetchone()
+    if row is None:
+        raise ApiError(404, "文档不存在", "not_found")
+    type_id = (
+        as_int(payload.get("type_id"), "type_id")
+        if "type_id" in payload
+        else existing["type_id"]
+    )
+    fetch_note_type(conn, type_id)
+    title = (
+        clean_text(payload.get("title"), "笔记标题", MAX_TITLE)
+        if "title" in payload
+        else existing["title"]
+    )
+    chapter = (
+        optional_text(payload.get("chapter"), "章节", MAX_NOTE_CHAPTER)
+        if "chapter" in payload
+        else existing["chapter"]
+    )
+    section = (
+        optional_text(payload.get("section"), "小节", MAX_NOTE_SECTION)
+        if "section" in payload
+        else existing["section"]
+    )
+    note_time = (
+        parse_datetime_text(payload.get("note_time"), "笔记时间")
+        if "note_time" in payload
+        else existing["note_time"]
+    )
+    excerpt = (
+        optional_text(payload.get("excerpt"), "原文片段", MAX_FIELD_VALUE)
+        if "excerpt" in payload
+        else existing["excerpt"]
+    )
+    content = (
+        optional_text(payload.get("content"), "笔记内容", MAX_FIELD_VALUE)
+        if "content" in payload
+        else existing["content"]
+    )
+    tags = (
+        unique_tags(payload.get("tags", []))
+        if "tags" in payload
+        else existing["tags"]
+    )
+
+    with conn:
+        conn.execute(
+            "UPDATE book_notes SET doc_id = ?, type_id = ?, title = ?, "
+            "chapter = ?, section = ?, note_time = ?, excerpt = ?, "
+            "content = ?, updated_at = ? WHERE id = ?",
+            (
+                doc_id,
+                type_id,
+                title,
+                chapter,
+                section,
+                note_time,
+                excerpt,
+                content,
+                now_text(),
+                note_id,
+            ),
+        )
+        _set_note_tags(conn, note_id, tags)
+    return fetch_note(conn, note_id)
+
+
+def delete_note(conn: sqlite3.Connection, note_id: int) -> None:
+    row = conn.execute(
+        "SELECT id FROM book_notes WHERE id = ?", (note_id,)
+    ).fetchone()
+    if row is None:
+        raise ApiError(404, "笔记不存在", "not_found")
+    with conn:
+        conn.execute("DELETE FROM book_notes WHERE id = ?", (note_id,))
+
+
+# ---------------------------------------------------------------------------
+# Note tags
+# ---------------------------------------------------------------------------
+
+
+def list_note_tags(
+    conn: sqlite3.Connection, sort: str = "count", q: str = ""
+) -> list[dict]:
+    where: list[str] = []
+    params: list = []
+    if q:
+        where.append("t.name LIKE ? ESCAPE '\\'")
+        params.append(like_pattern(q))
+    clause = (" WHERE " + " AND ".join(where)) if where else ""
+    order = "t.name COLLATE NOCASE ASC"
+    if sort == "count":
+        order = "count DESC, t.name COLLATE NOCASE ASC"
+    elif sort != "name":
+        raise ApiError(400, "sort 参数必须是 name 或 count")
+    rows = conn.execute(
+        f"SELECT t.id, t.name, COUNT(nl.note_id) AS count FROM note_tags t "
+        f"LEFT JOIN note_tag_links nl ON nl.tag_id = t.id"
+        f"{clause} GROUP BY t.id ORDER BY {order}",
+        params,
+    ).fetchall()
+    return [{"id": r["id"], "name": r["name"], "count": r["count"]} for r in rows]
+
+
+def rename_note_tag(
+    conn: sqlite3.Connection, tag_id: int, payload: dict
+) -> dict:
+    row = conn.execute(
+        "SELECT id FROM note_tags WHERE id = ?", (tag_id,)
+    ).fetchone()
+    if row is None:
+        raise ApiError(404, "笔记标签不存在", "not_found")
+    name = normalize_tag(payload.get("name"))
+    try:
+        with conn:
+            conn.execute("UPDATE note_tags SET name = ? WHERE id = ?", (name, tag_id))
+    except sqlite3.IntegrityError:
+        raise ApiError(409, f"笔记标签已存在：{name}", "conflict") from None
+    result = conn.execute(
+        "SELECT t.id, t.name, COUNT(nl.note_id) AS count FROM note_tags t "
+        "LEFT JOIN note_tag_links nl ON nl.tag_id = t.id "
+        "WHERE t.id = ? GROUP BY t.id",
+        (tag_id,),
+    ).fetchone()
+    return {"id": result["id"], "name": result["name"], "count": result["count"]}
+
+
+def delete_note_tag(conn: sqlite3.Connection, tag_id: int) -> None:
+    row = conn.execute(
+        "SELECT id FROM note_tags WHERE id = ?", (tag_id,)
+    ).fetchone()
+    if row is None:
+        raise ApiError(404, "笔记标签不存在", "not_found")
+    with conn:
+        conn.execute("DELETE FROM note_tags WHERE id = ?", (tag_id,))
+
+
+def cleanup_orphan_note_tags(conn: sqlite3.Connection) -> int:
+    with conn:
+        cur = conn.execute(
+            "DELETE FROM note_tags WHERE id NOT IN "
+            "(SELECT DISTINCT tag_id FROM note_tag_links)"
         )
     return cur.rowcount
 

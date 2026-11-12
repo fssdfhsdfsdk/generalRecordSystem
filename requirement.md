@@ -1008,6 +1008,44 @@ IR-38～IR-41 均满足。仓库与工具子系统各自拥有独立数据库、
 | QV-42 | 浏览器验证 | 1440px 下列表与总览抽屉宽度 1188px、左边缘 252px；关闭后筛选保留；编辑/标签/删除流程正常；390px 全宽；侧边栏可点击；无横向溢出 | **通过** |
 | QV-43 | 回归 | LaTeX 公式与模糊标签搜索保持正常；console error 为 0；生产构建成功 | **通过** |
 
+### 14.8 功能增补（书籍笔记，2026-11-12）
+
+| ID | 变更输入 | 优先级 |
+| --- | --- | --- |
+| IR-42 | 在书籍与文档子系统中新增可多条记录的「书籍笔记」：一条笔记对应一本书 / 文档，记录原文片段、笔记内容、章 / 小节、时间、类型与独立标签 | Must |
+| IR-43 | 侧边栏在「书籍与文档」下新增「笔记管理」：笔记列表、笔记标签、笔记标签模糊搜索、类型管理 | Must |
+| IR-44 | 文档浏览页在原有「阅读笔记」上方新增「阅读笔记列表」入口，以抽屉展示当前文档的笔记列表 | Must |
+
+| ID | 澄清 / 决策 |
+| --- | --- |
+| C-77 | 不新增第 6 个数据库文件，笔记复用 `docs.db`：笔记与文档强关联（`doc_id` 外键、列表需 join 书籍名），独立库会引入跨库 ATTACH、健康检查与级联删除问题。 |
+| C-78 | 在 `docs.db` 新增 `note_types`、`book_notes`、`note_tags`、`note_tag_links` 四张表；启动时 `CREATE TABLE IF NOT EXISTS` 自动补表，不改动已有表，已有文档、标签与阅读历史保持正常。 |
+| C-79 | 默认笔记类型为「摘录 / 注释 / 想法 / 疑问」，通过 `app_meta.note_seed_version` 只初始化一次；删除后重启不会恢复。`schema_version` 由 2 升到 3。 |
+| C-80 | 笔记标签采用三表模型，与文档标签、记录标签、计划标签完全独立；标签在保存笔记时自动创建，支持重命名、删除与孤立标签清理。 |
+| C-81 | `book_notes.type_id` 使用 `ON DELETE RESTRICT`：类型下仍有笔记时删除返回 409；`book_notes.doc_id` 使用 `ON DELETE CASCADE`：删除文档级联删除其笔记。 |
+| C-82 | 列表接口只返回前 200 字预览与截断标记（`excerpt_preview` / `content_preview` / `*_truncated`），完整内容由单条详情接口返回；列表项折叠箭头展开预览，完整内容进入查看抽屉。 |
+| C-83 | 新建、编辑、查看笔记均使用抽屉；文档浏览页的「阅读笔记列表」同样以抽屉展示当前文档的笔记，支持继续新建、展开预览、查看与编辑。 |
+| C-84 | 应用版本号保持 `1.5.0`：本次为兼容性功能增补，不改变既有接口与数据语义。 |
+
+| ID | 派生需求 | 优先级 | 验收标准 |
+| --- | --- | --- | --- |
+| DR-70 | 笔记数据模型 | Must | `book_notes` 含 `doc_id`、`type_id`、`title`、`chapter`、`section`、`note_time`、`excerpt`、`content`；三表标签与独立类型表 |
+| DR-71 | 笔记列表与筛选 | Must | 展示标题、书籍名 + 章 / 小节、类型、标签、时间；支持标题搜索、标签精确（AND）、标签模糊（AND）、类型、书籍过滤与排序 |
+| DR-72 | 快速预览 | Must | 每个列表项有折叠箭头；展开显示原文片段与笔记内容前 200 字，超出以 `…` 结尾 |
+| DR-73 | 抽屉交互 | Must | 新建 / 编辑 / 查看均为抽屉；文档浏览页「阅读笔记列表」抽屉可关闭并保持页面状态 |
+| DR-74 | 类型与标签管理 | Must | 类型可增改；有笔记时拒绝删除；笔记标签可重命名、删除、清理孤立标签 |
+| DR-75 | 兼容与文档 | Must | 已有 `docs.db` 自动补表且数据不丢；README / requirement / dev 文档更新；后端测试与生产构建通过 |
+
+| ID | 资格活动 | 通过标准 | 结果 |
+| --- | --- | --- | --- |
+| QV-44 | 后端测试 | `tests/test_notes.py` 11 项覆盖种子、CRUD、过滤与预览截断、级联删除、`note_count`、校验、类型保护、标签重命名 / 冲突 / 删除 / 孤立清理 | **通过** |
+| QV-45 | 回归与构建 | 全量后端测试 81 项通过；`npm run build` 成功；已有 129 篇文档数据保持完整 | **通过** |
+| QV-46 | 浏览器验证 | 侧边栏四个笔记入口、列表折叠预览 200 字、查看 / 编辑 / 删除抽屉、文档详情「阅读笔记列表」抽屉、标签与类型管理均正常；console error 为 0 | **通过** |
+
+### 14.9 增补验收结论
+
+IR-42～IR-44 均满足。书籍笔记复用 `docs.db`，未新增数据库文件；旧库启动时自动补齐 4 张新表，`schema_version=3`，已有文档与标签数据不受影响。后端测试由 70 项扩展到 81 项全部通过，生产构建成功，浏览器验收无 console error。
+
 ---
 
 ## 15. 变更记录
@@ -1020,6 +1058,7 @@ IR-38～IR-41 均满足。仓库与工具子系统各自拥有独立数据库、
 | v1.3 | 2026-11-02 | CR-03：`config.json` 启动配置（host/port/双数据库/浏览器/调试）；CLI/env/file/default 优先级；BOM 兼容；`start.bat` 去硬编码；43 项后端测试 | 实现团队 |
 | v1.4 | 2026-11-03 | CR-04：书籍与文档管理子系统；`docs.db` 三库隔离；五类默认类型；结构化文档信息（作者/时间/版本/资源地址/其它）与独立筛选；阅读笔记/感想/历史/状态/进度/优先级；文档标签三表；类型与标签管理；58 项后端测试、8 项文档 E2E | 实现团队 |
 | v1.5 | 2026-11-08 | CR-05：仓库管理与工具管理子系统；五库隔离；搜索拆分为 `q` / `content_q`；分页 10/20/50 切换；文档标签展示优化；五子系统模糊标签搜索（`tag_q`）与五个独立模糊标签页面；LaTeX 数学公式（`$` / `$$` / `\(` / `\[`，BUG-034）；文档列表/总览详情改为悬浮抽屉（BUG-035）；70 项后端测试 | 实现团队 |
+| v1.5（增补） | 2026-11-12 | CR-06：书籍笔记；复用 `docs.db` 新增 `note_types` / `book_notes` / `note_tags` / `note_tag_links` 四表并自动补表；默认四类笔记类型；笔记列表筛选、200 字折叠预览、查看 / 编辑抽屉；笔记标签与类型管理；文档浏览页「阅读笔记列表」抽屉；81 项后端测试 | 实现团队 |
 
 ---
 
@@ -1060,6 +1099,8 @@ IR-38～IR-41 均满足。仓库与工具子系统各自拥有独立数据库、
 | 计划 API 客户端 | `src/subsystems/plans/api.js` |
 | 文档总览 / 类型列表 / 内容 / 编辑 | `src/subsystems/docs/pages/DocsOverviewPage.jsx`、`DocListPage.jsx`、`DocContentPage.jsx`、`DocEditPage.jsx` |
 | 文档类型 / 标签管理 | `src/subsystems/docs/pages/DocTypesPage.jsx`、`DocTagsPage.jsx` |
+| 书籍笔记列表 / 标签 / 类型 | `src/subsystems/docs/pages/NotesListPage.jsx`、`NoteTagsPage.jsx`、`NoteTypesPage.jsx` |
+| 书籍笔记抽屉与快速预览 | `src/subsystems/docs/components/NoteQuickList.jsx`、`NoteEditDrawer.jsx`、`NoteViewDrawer.jsx`、`DocNotesDrawer.jsx` |
 | 文档 API / 组件 | `src/subsystems/docs/api.js`、`src/subsystems/docs/components/` |
 | 仓库列表 / 标签 / 语言 / 模糊标签 | `src/subsystems/repositories/pages/RepositoryListPage.jsx`、`RepositoryTagsPage.jsx`、`RepositoryLanguagesPage.jsx`、`RepositoryFuzzyTagPage.jsx` |
 | 工具列表 / 标签 / 平台 / 模糊标签 | `src/subsystems/tools/pages/ToolListPage.jsx`、`ToolTagsPage.jsx`、`ToolPlatformsPage.jsx`、`ToolFuzzyTagPage.jsx` |
@@ -1068,12 +1109,12 @@ IR-38～IR-41 均满足。仓库与工具子系统各自拥有独立数据库、
 | 记录专属组件 | `src/subsystems/records/components/` |
 | 共享 Markdown / 标题 / 标签 / 省略文本 | `src/components/` |
 | 启动 | `start.bat`、`config.json`、`server.py` |
-| 后端测试 | `tests/test_api.py`、`tests/test_plans.py`、`tests/test_docs.py`、`tests/test_repositories.py`、`tests/test_tools.py`、`tests/test_config.py` |
+| 后端测试 | `tests/test_api.py`、`tests/test_plans.py`、`tests/test_docs.py`、`tests/test_notes.py`、`tests/test_repositories.py`、`tests/test_tools.py`、`tests/test_config.py` |
 
 ## 附录 B：验收命令（v1.5）
 
 ```bash
-# 后端测试（70 项）
+# 后端测试（81 项）
 python -m unittest discover -s tests -v
 
 # 前端生产构建

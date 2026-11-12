@@ -48,4 +48,30 @@ export const docApi = {
   removeTag: (id) => request(`/api/docs/tags/${id}`, { method: 'DELETE' }),
   cleanupTags: () =>
     request('/api/docs/tags/orphans', { method: 'DELETE' }),
+
+  listNoteTypes: () => request('/api/docs/note-types'),
+  createNoteType: (payload) =>
+    request('/api/docs/note-types', { method: 'POST', body: payload }),
+  updateNoteType: (id, payload) =>
+    request(`/api/docs/note-types/${id}`, { method: 'PUT', body: payload }),
+  removeNoteType: (id) =>
+    request(`/api/docs/note-types/${id}`, { method: 'DELETE' }),
+
+  listNotes: (params = {}) => request(`/api/docs/notes${queryString(params)}`),
+  getNote: (id) => request(`/api/docs/notes/${id}`),
+  createNote: (payload) =>
+    request('/api/docs/notes', { method: 'POST', body: payload }),
+  updateNote: (id, payload) =>
+    request(`/api/docs/notes/${id}`, { method: 'PUT', body: payload }),
+  removeNote: (id) =>
+    request(`/api/docs/notes/${id}`, { method: 'DELETE' }),
+
+  listNoteTags: ({ sort = 'count', q = '' } = {}) =>
+    request(`/api/docs/note-tags${queryString({ sort, q })}`),
+  renameNoteTag: (id, payload) =>
+    request(`/api/docs/note-tags/${id}`, { method: 'PUT', body: payload }),
+  removeNoteTag: (id) =>
+    request(`/api/docs/note-tags/${id}`, { method: 'DELETE' }),
+  cleanupNoteTags: () =>
+    request('/api/docs/note-tags/orphans', { method: 'DELETE' }),
 }

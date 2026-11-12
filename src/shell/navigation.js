@@ -55,6 +55,14 @@ export function pageTitle(segments, types = [], docTypes = []) {
   }
   if (segments[0] === 'docs') {
     if (segments.length === 1) return '书籍与文档'
+    if (segments[1] === 'notes') {
+      if (segments[2] === 'types') return '笔记类型管理'
+      if (segments[2] === 'tag-search') return '笔记标签模糊搜索'
+      if (segments[2] === 'tags') {
+        return segments.length > 3 ? '笔记标签筛选' : '笔记标签管理'
+      }
+      return '笔记列表'
+    }
     if (segments[1] === 'types') return '文档类型管理'
     if (segments[1] === 'tag-search') return '文档标签模糊搜索'
     if (segments[1] === 'tags') {
@@ -105,6 +113,20 @@ export function breadcrumb(segments, types = [], docTypes = []) {
   }
   if (subsystem === 'docs') {
     if (segments.length === 1) return ['拾录', '书籍与文档', '文档总览']
+    if (segments[1] === 'notes') {
+      if (segments[2] === 'types') return ['拾录', '书籍与文档', '笔记类型管理']
+      if (segments[2] === 'tag-search') {
+        return ['拾录', '书籍与文档', '笔记标签模糊搜索']
+      }
+      if (segments[2] === 'tags') {
+        return [
+          '拾录',
+          '书籍与文档',
+          segments.length > 3 ? '笔记标签筛选' : '笔记标签管理',
+        ]
+      }
+      return ['拾录', '书籍与文档', '笔记列表']
+    }
     if (segments[1] === 'types') return ['拾录', '书籍与文档', '类型管理']
     if (segments[1] === 'tag-search') {
       return ['拾录', '书籍与文档', '文档标签模糊搜索']

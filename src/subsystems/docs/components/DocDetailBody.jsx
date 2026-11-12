@@ -1,10 +1,12 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Button, Collapse, Descriptions, Progress, Tooltip } from 'antd'
 import {
   BookOutlined,
   ClockCircleOutlined,
   EditOutlined,
+  FileTextOutlined,
   HistoryOutlined,
+  PlusOutlined,
   ReadOutlined,
   TagsOutlined,
 } from '@ant-design/icons'
@@ -15,6 +17,7 @@ import TagPill from '../../../components/TagPill'
 import DocTypeIcon from './DocTypeIcon'
 import DocStatusTag from './DocStatusTag'
 import DocPriorityTag from './DocPriorityTag'
+import DocNotesDrawer from './DocNotesDrawer'
 import { httpLink } from '../docInfo'
 import {
   docStatusMeta,
@@ -55,6 +58,7 @@ function HistoryList({ histories }) {
 }
 
 export default function DocDetailBody({ doc, onTagClick, onEdit }) {
+  const [notesOpen, setNotesOpen] = useState(false)
   const type = {
     id: doc.type_id,
     name: doc.type_name,
@@ -128,6 +132,40 @@ export default function DocDetailBody({ doc, onTagClick, onEdit }) {
 
       <div className="doc-content-layout">
         <main className="doc-content-main">
+          <section className="doc-paper-section doc-notes-entry">
+            <div className="doc-paper-heading">
+              <div>
+                <div className="eyebrow">BOOK NOTES</div>
+                <h2>
+                  <FileTextOutlined /> 阅读笔记列表
+                </h2>
+              </div>
+              <Button
+                size="small"
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => setNotesOpen(true)}
+              >
+                打开笔记列表
+              </Button>
+            </div>
+            <button
+              type="button"
+              className="doc-notes-entry-card"
+              onClick={() => setNotesOpen(true)}
+            >
+              <span className="doc-notes-entry-count">
+                <strong>{doc.note_count || 0}</strong>
+                <span>条独立笔记</span>
+              </span>
+              <span className="doc-notes-entry-copy">
+                把原文片段、注释、想法与疑问拆成一条条笔记，按标签和类型重新找回。
+                点击打开抽屉式列表，展开可预览前 200 字。
+              </span>
+              <span className="doc-notes-entry-action">查看笔记 →</span>
+            </button>
+          </section>
+
           <section className="doc-paper-section">
             <div className="doc-paper-heading">
               <div>
@@ -280,6 +318,13 @@ export default function DocDetailBody({ doc, onTagClick, onEdit }) {
           </section>
         </aside>
       </div>
+
+      <DocNotesDrawer
+        open={notesOpen}
+        documentId={doc.id}
+        documentTitle={doc.title}
+        onClose={() => setNotesOpen(false)}
+      />
     </div>
   )
 }

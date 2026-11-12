@@ -365,6 +365,100 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"deleted": True, "id": tag_id})
                 return
 
+        # -- book notes -------------------------------------------------------
+        if path == "/api/docs/note-types":
+            if method == "GET":
+                with db_session(self.docs_db_path) as conn:
+                    types = docs_store.list_note_types(conn)
+                self._send_json({"types": types, "total": len(types)})
+                return
+            if method == "POST":
+                payload = self._read_json()
+                with db_session(self.docs_db_path) as conn:
+                    result = docs_store.create_note_type(conn, payload)
+                self._send_json(result, 201)
+                return
+
+        match = re.fullmatch(r"/api/docs/note-types/(\d+)", path)
+        if match:
+            type_id = int(match.group(1))
+            if method == "GET":
+                with db_session(self.docs_db_path) as conn:
+                    self._send_json(docs_store.fetch_note_type(conn, type_id))
+                return
+            if method == "PUT":
+                payload = self._read_json()
+                with db_session(self.docs_db_path) as conn:
+                    result = docs_store.update_note_type(conn, type_id, payload)
+                self._send_json(result)
+                return
+            if method == "DELETE":
+                with db_session(self.docs_db_path) as conn:
+                    docs_store.delete_note_type(conn, type_id)
+                self._send_json({"deleted": True, "id": type_id})
+                return
+
+        if path == "/api/docs/note-tags" and method == "GET":
+            with db_session(self.docs_db_path) as conn:
+                tags = docs_store.list_note_tags(
+                    conn, q.get("sort", "count"), q.get("q", "")
+                )
+            self._send_json({"tags": tags, "total": len(tags)})
+            return
+
+        if path == "/api/docs/note-tags/orphans" and method == "DELETE":
+            with db_session(self.docs_db_path) as conn:
+                deleted = docs_store.cleanup_orphan_note_tags(conn)
+            self._send_json({"deleted": deleted})
+            return
+
+        match = re.fullmatch(r"/api/docs/note-tags/(\d+)", path)
+        if match:
+            tag_id = int(match.group(1))
+            if method == "PUT":
+                payload = self._read_json()
+                with db_session(self.docs_db_path) as conn:
+                    result = docs_store.rename_note_tag(conn, tag_id, payload)
+                self._send_json(result)
+                return
+            if method == "DELETE":
+                with db_session(self.docs_db_path) as conn:
+                    docs_store.delete_note_tag(conn, tag_id)
+                self._send_json({"deleted": True, "id": tag_id})
+                return
+
+        if path == "/api/docs/notes":
+            if method == "GET":
+                with db_session(self.docs_db_path) as conn:
+                    notes = docs_store.list_notes(conn, q)
+                self._send_json({"notes": notes, "total": len(notes)})
+                return
+            if method == "POST":
+                payload = self._read_json()
+                with db_session(self.docs_db_path) as conn:
+                    result = docs_store.create_note(conn, payload)
+                self._send_json(result, 201)
+                return
+
+        match = re.fullmatch(r"/api/docs/notes/(\d+)", path)
+        if match:
+            note_id = int(match.group(1))
+            if method == "GET":
+                with db_session(self.docs_db_path) as conn:
+                    self._send_json(docs_store.fetch_note(conn, note_id))
+                return
+            if method == "PUT":
+                payload = self._read_json()
+                with db_session(self.docs_db_path) as conn:
+                    result = docs_store.update_note(conn, note_id, payload)
+                self._send_json(result)
+                return
+            if method == "DELETE":
+                with db_session(self.docs_db_path) as conn:
+                    docs_store.delete_note(conn, note_id)
+                self._send_json({"deleted": True, "id": note_id})
+                return
+
         if path == "/api/docs":
             if method == "GET":
                 with db_session(self.docs_db_path) as conn:

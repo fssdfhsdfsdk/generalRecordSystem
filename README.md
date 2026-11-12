@@ -132,7 +132,7 @@ start.bat
 - 侧边栏始终包含 **「主页面」**。
 - 进入通用记录后，侧边栏切换为记录类型、标签库、标签模糊搜索、类型管理。
 - 进入计划管理后，侧边栏切换为计划总览、长远/中期/短期计划、计划标签、标签模糊搜索。
-- 进入书籍与文档后，侧边栏切换为文档总览、五类默认文档、文档标签、标签模糊搜索、类型管理。
+- 进入书籍与文档后，侧边栏切换为文档总览、五类默认文档、文档标签、标签模糊搜索、类型管理；下方另有一组「笔记管理」：笔记列表、笔记标签、标签模糊搜索、类型管理。
 - 进入仓库管理后，侧边栏切换为仓库列表、编程语言管理、仓库标签管理、标签模糊搜索。
 - 进入工具管理后，侧边栏切换为工具列表、支持平台管理、工具标签管理、标签模糊搜索。
 - 桌面端与移动端均支持；桌面端点击左上角折叠按钮可收起/展开侧边栏，移动端侧边栏以遮罩抽屉方式展开。
@@ -249,7 +249,7 @@ start.bat
 - 列表查看时，每个非空字段独占一行；空字段不显示，超长显示 `...`，悬浮显示完整内容。
 - 资源地址显示为可点击的「资源地址」链接，在新标签页打开；原 URL 放在悬浮提示中。
 - 文档信息筛选：作者、时间、版本、资源地址、其它信息各有一个子串筛选输入框。
-- 文档库不实现结构自动迁移；`docs.db` 按新结构创建。
+- `docs.db` 不重建已有表：启动时以 `CREATE TABLE IF NOT EXISTS` 补齐书籍笔记相关新表，已有文档、标签与阅读历史保持不变。
 - 阅读状态：未阅读 / 进行中 / 完成；阅读进度 0–100%；优先级 1–5。
 - 阅读笔记与阅读感想：分别保存，均支持 Markdown / GFM。
 - 文档标签：`documents` + `doc_tags` + `doc_tag_links` 三表模型；列表不单独设标签列，标签在标题下方按行宽自动换行并完整显示。
@@ -286,6 +286,19 @@ start.bat
 ![类型管理](docs/screenshots/docs-types.png)
 
 ![标签管理](docs/screenshots/docs-tags.png)
+
+### 书籍笔记
+
+一本书 / 一篇文档可以拥有任意多条独立笔记，用于记录原文片段、注释、想法与疑问。笔记与文档的「阅读笔记」文本字段并存：前者是可检索的多条结构化笔记，后者仍适合放整篇阅读记录。
+
+- `/docs/notes`：笔记列表。展示标题、书籍名 + 章 / 小节、类型、标签与记录时间；支持标题搜索、标签精确过滤（AND）、标签模糊过滤、类型过滤、书籍过滤与排序。
+- 列表项带有折叠箭头，展开后显示「原文片段」与「笔记内容」的前 200 字，超出以 `…` 结尾；完整内容进入笔记查看。
+- 新建与编辑笔记使用抽屉；查看笔记同样使用抽屉，支持编辑、删除与刷新。
+- `/docs/notes/tags`：笔记标签管理，独立三表词库（`book_notes` + `note_tags` + `note_tag_links`），与文档标签完全独立；支持重命名、删除与孤立标签清理。
+- `/docs/notes/tag-search`：笔记标签模糊搜索，多个关键词空白分隔并 AND。
+- `/docs/notes/types`：笔记类型管理。首次初始化写入「摘录 / 注释 / 想法 / 疑问」四类；之后可改名、改描述或新增。类型下仍有笔记时拒绝删除（409）。
+- 文档浏览页在「阅读笔记」上方新增「阅读笔记列表」卡片，显示当前文档的笔记数量；点击后以抽屉展示该文档的全部笔记，可继续新建、展开预览、查看与编辑。
+- 笔记数据保存在 `docs.db`；`book_notes.doc_id` 外键带 `ON DELETE CASCADE`，删除文档会同时删除它的笔记。
 
 ## 仓库管理
 
@@ -415,7 +428,7 @@ start.bat
 │  ├─ subsystems/
 │  │  ├─ records/               # 记录页面与记录专属组件
 │  │  ├─ plans/                 # 计划页面、API、表单/详情/弹窗
-│  │  ├─ docs/                  # 文档页面、API、类型/标签/阅读历史组件
+│  │  ├─ docs/                  # 文档页面、API、类型/标签/阅读历史/书籍笔记组件
 │  │  ├─ repositories/          # 仓库列表、语言/标签管理、表单与详情
 │  │  └─ tools/                 # 工具列表、平台/标签管理、表单与详情
 │  ├─ components/               # 跨子系统共享组件（Markdown、标题、标签、
@@ -429,6 +442,7 @@ start.bat
 │  ├─ test_api.py               # 记录子系统 18 项测试
 │  ├─ test_plans.py             # 计划子系统 19 项测试
 │  ├─ test_docs.py              # 书籍与文档 16 项测试
+│  ├─ test_notes.py             # 书籍笔记 11 项测试
 │  ├─ test_repositories.py      # 仓库管理 4 项测试
 │  ├─ test_tools.py             # 工具管理 4 项测试
 │  └─ test_config.py            # 启动配置 8 项测试
@@ -473,11 +487,17 @@ plans 1 ─── n plan_nodes
 ```text
 doc_types 1 ─── n documents 1 ─── n doc_reading_history
                         │
-                        └── n doc_tag_links ─── doc_tags
+                        ├── n doc_tag_links ─── doc_tags
+                        └── n book_notes ─── note_types
+                                 │
+                                 └── n note_tag_links ─── note_tags
 
 documents: title / author / doc_time / version / resource_url /
            document_info（其它信息） / notes / reflections /
            reading_status / reading_progress / priority
+
+book_notes: doc_id / type_id / title / chapter / section / note_time /
+            excerpt（原文片段） / content（笔记内容）
 ```
 
 ### repository.db
@@ -502,7 +522,7 @@ tools 1 ─── n tool_resources
 | --- | --- |
 | `records.db` | `record_types`、`type_fields`、`records`、`record_field_values`、`tags`、`record_tags`、`app_meta` |
 | `plans.db` | `plans`、`plan_nodes`、`plan_actuals`、`plan_progress_logs`、`plan_status_logs`、`plan_tags`、`plan_tag_links`、`app_meta` |
-| `docs.db` | `doc_types`、`documents`、`doc_reading_history`、`doc_tags`、`doc_tag_links`、`app_meta` |
+| `docs.db` | `doc_types`、`documents`、`doc_reading_history`、`doc_tags`、`doc_tag_links`、`note_types`、`book_notes`、`note_tags`、`note_tag_links`、`app_meta` |
 | `repository.db` | `repositories`、`repository_resources`、`repository_languages`、`repository_language_links`、`repository_tags`、`repository_tag_links`、`repository_relations`、`app_meta` |
 | `tools.db` | `tools`、`tool_resources`、`tool_platforms`、`tool_platform_links`、`tool_tags`、`tool_tag_links`、`tool_relations`、`app_meta` |
 
@@ -512,6 +532,9 @@ tools 1 ─── n tool_resources
 - `documents.type_id` 使用 `ON DELETE RESTRICT`；类型下仍有文档时拒绝删除，避免误删资料。
 - `doc_reading_history.document_id` 与 `doc_tag_links.document_id` 随文档级联删除。
 - 删除标签会从所有文档移除该标签，但不会删除文档。
+- `book_notes.doc_id` 随文档级联删除；`book_notes.type_id` 使用 `ON DELETE RESTRICT`，类型下仍有笔记时拒绝删除。
+- 笔记标签与文档标签是两套独立词库；删除笔记标签只解除关联，不删除笔记。
+- 默认笔记类型只在 `docs.db` 首次初始化时写入（`app_meta.note_seed_version`），之后删除不会在重启时恢复。
 - `repository_languages` / `repository_tags` / `tool_platforms` / `tool_tags` 的名称均大小写不敏感唯一。
 - 默认编程语言与默认支持平台只在首次建库时写入，之后可在管理页自由增删。
 - `repository_relations` 对 `(repository_id, related_repository_id)` 唯一；`tool_relations` 对 `(tool_id, related_tool_id)` 唯一，且应用层拒绝自关联。
@@ -575,6 +598,13 @@ tools 1 ─── n tool_resources
 | POST | `/api/docs/tags` | 新建文档标签 |
 | PUT / DELETE | `/api/docs/tags/{id}` | 重命名 / 删除标签 |
 | DELETE | `/api/docs/tags/orphans` | 清理孤立文档标签 |
+| GET / POST | `/api/docs/notes?q=&doc_id=&type_id=&tags=&tag_q=&sort=&limit=` | 笔记列表（只返回前 200 字预览与截断标记） / 新建笔记 |
+| GET / PUT / DELETE | `/api/docs/notes/{id}` | 笔记完整详情 / 局部更新 / 删除 |
+| GET / POST | `/api/docs/note-types` | 笔记类型列表 / 新建 |
+| GET / PUT / DELETE | `/api/docs/note-types/{id}` | 笔记类型详情 / 更新 / 删除（有笔记时拒绝） |
+| GET | `/api/docs/note-tags?sort=name\|count&q=` | 笔记标签列表（含引用计数） |
+| PUT / DELETE | `/api/docs/note-tags/{id}` | 重命名 / 删除笔记标签 |
+| DELETE | `/api/docs/note-tags/orphans` | 清理孤立笔记标签 |
 
 ### 仓库管理
 
@@ -840,3 +870,4 @@ git config --global https.proxy http://127.0.0.1:7890
 - [需求与资格基线（requirement.md）](requirement.md)
 - [开发缺陷记录（bug-tracks.md）](bug-tracks.md)
 - [开发特性：data 目录自动快照到 GitHub Releases](doc/dev-feat-data-release-snapshot.md)
+- [开发特性：书籍笔记（Book Notes）](doc/dev-feat-book-notes.md)
