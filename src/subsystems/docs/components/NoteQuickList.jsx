@@ -30,6 +30,7 @@ export default function NoteQuickList({
   onDelete,
   onTagClick,
   onAdd,
+  onDocClick,
 }) {
   const [expanded, setExpanded] = useState(() => new Set())
   const ids = useMemo(() => new Set(notes.map((note) => note.id)), [notes])
@@ -103,10 +104,27 @@ export default function NoteQuickList({
                   {note.title}
                 </button>
                 <div className="note-quick-meta">
-                  <span className="note-quick-book">
-                    <BookOutlined /> {note.doc_title}
-                    {location ? <span className="note-quick-location"> / {location}</span> : null}
-                  </span>
+                  {onDocClick ? (
+                    <button
+                      type="button"
+                      className="note-quick-book is-clickable"
+                      title="查看书籍详情"
+                      aria-label={`查看书籍 ${note.doc_title}`}
+                      onClick={() => onDocClick(note)}
+                    >
+                      <BookOutlined /> {note.doc_title}
+                      {location ? (
+                        <span className="note-quick-location"> / {location}</span>
+                      ) : null}
+                    </button>
+                  ) : (
+                    <span className="note-quick-book">
+                      <BookOutlined /> {note.doc_title}
+                      {location ? (
+                        <span className="note-quick-location"> / {location}</span>
+                      ) : null}
+                    </span>
+                  )}
                   <span className="note-quick-type">{note.type_name}</span>
                   <span className="note-quick-time">
                     {formatShortDate(note.note_time || note.created_at)}

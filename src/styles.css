@@ -7159,6 +7159,25 @@ button.tag-pill {
   color: var(--ink-soft);
 }
 
+.note-quick-book.is-clickable,
+.note-view-book.is-clickable {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.note-quick-book.is-clickable:hover,
+.note-view-book.is-clickable:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
 .note-quick-location {
   color: var(--faint);
 }

@@ -25,6 +25,7 @@ import PageHeader from '../../../components/PageHeader'
 import NoteQuickList from '../components/NoteQuickList'
 import NoteEditDrawer from '../components/NoteEditDrawer'
 import NoteViewDrawer from '../components/NoteViewDrawer'
+import DocViewDrawer from '../components/DocViewDrawer'
 
 const SORT_OPTIONS = [
   { value: 'updated_desc', label: '最近更新' },
@@ -56,6 +57,7 @@ export default function NotesListPage({
   const [editOpen, setEditOpen] = useState(false)
   const [editingNoteId, setEditingNoteId] = useState(null)
   const [viewNoteId, setViewNoteId] = useState(null)
+  const [viewDocId, setViewDocId] = useState(null)
 
   const initialTagKey = initialTags.join('\u0000')
 
@@ -333,6 +335,7 @@ export default function NotesListPage({
         onDelete={removeNote}
         onTagClick={filterByTag}
         onAdd={openCreate}
+        onDocClick={(note) => setViewDocId(note.doc_id)}
       />
 
       <NoteEditDrawer
@@ -349,6 +352,16 @@ export default function NotesListPage({
         onClose={() => setViewNoteId(null)}
         onEdit={(note) => openEdit(note)}
         onDeleted={() => refresh()}
+      />
+
+      <DocViewDrawer
+        open={Boolean(viewDocId)}
+        documentId={viewDocId}
+        onClose={() => setViewDocId(null)}
+        onDeleted={() => {
+          setViewDocId(null)
+          refresh()
+        }}
       />
     </div>
   )

@@ -20,6 +20,7 @@ import { docApi } from '../api'
 import EmptyState from '../../../components/EmptyState'
 import Markdown from '../../../components/Markdown'
 import TagPill from '../../../components/TagPill'
+import DocViewDrawer from './DocViewDrawer'
 import { formatDate } from '../../../utils'
 
 export default function NoteViewDrawer({
@@ -34,6 +35,11 @@ export default function NoteViewDrawer({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [reloadToken, setReloadToken] = useState(0)
+  const [docOpen, setDocOpen] = useState(false)
+
+  useEffect(() => {
+    if (!open) setDocOpen(false)
+  }, [open, noteId])
 
   useEffect(() => {
     if (!open || !noteId) return undefined
@@ -144,10 +150,18 @@ export default function NoteViewDrawer({
       ) : (
         <div className="note-view-body">
           <div className="note-view-meta">
-            <span className="note-view-book">
+            <button
+              type="button"
+              className="note-view-book is-clickable"
+              title="查看书籍详情"
+              aria-label={`查看书籍 ${note.doc_title}`}
+              onClick={() => setDocOpen(true)}
+            >
               <BookOutlined /> {note.doc_title}
-              {location ? <span className="note-view-location"> / {location}</span> : null}
-            </span>
+              {location ? (
+                <span className="note-view-location"> / {location}</span>
+              ) : null}
+            </button>
             <span className="note-view-type">{note.type_name}</span>
             {note.tags.map((tag) => (
               <TagPill key={tag} name={tag} size="sm" />
@@ -188,6 +202,19 @@ export default function NoteViewDrawer({
           </section>
         </div>
       )}
+
+      {note ? (
+        <DocViewDrawer
+          open={docOpen}
+          documentId={note.doc_id}
+          onClose={() => setDocOpen(false)}
+          onDeleted={() => {
+            setDocOpen(false)
+            onClose()
+            onDeleted?.()
+          }}
+        />
+      ) : null}
     </Drawer>
   )
 }

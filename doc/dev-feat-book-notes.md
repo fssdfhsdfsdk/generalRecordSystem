@@ -112,6 +112,7 @@ note_tag_links(
 ### 4.2 组件
 
 - `NoteQuickList`：列表项 + 折叠箭头；展开显示 `excerpt_preview` 与 `content_preview`，截断时追加 `…`；
+- 书籍名称在笔记列表与笔记查看中均可点击：列表页打开页面级 `DocViewDrawer`，查看抽屉内嵌 `DocViewDrawer`，关闭后回到原笔记；
 - `NoteEditDrawer`：新建 / 编辑抽屉；加载笔记类型、书籍选项与标签选项；Markdown 编辑器；
 - `NoteViewDrawer`：完整查看抽屉，显示原文片段、笔记内容、类型、标签、时间，支持编辑与删除；
 - `DocNotesDrawer`：文档详情内的当前书籍笔记列表抽屉；
