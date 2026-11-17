@@ -1,8 +1,8 @@
 # 拾录 · 记录、计划、阅读与技术资源工作台
 
-一个本地优先的个人工作台：**通用记录**负责保存事实、问答、根因与需求；**计划管理**负责把目标拆成节点、记录实际时间与进度变化；**书籍与文档**负责收拢书、论文、文章、技术规范与办公材料；**仓库管理**负责整理代码仓库、编程语言、资源地址与关联品；**工具管理**负责归档开发工具、支持平台、开源状态与关联品。五个子系统拥有独立的代码目录和独立的 SQLite 数据库。
+一个本地优先的个人工作台：**通用记录**负责保存事实、问答、根因与需求；**计划管理**负责把目标拆成节点、记录实际时间与进度变化；**书籍与文档**负责收拢书、论文、文章、技术规范与办公材料；**仓库管理**负责整理代码仓库、编程语言、资源地址与关联品；**工具管理**负责归档开发工具、支持平台、开源状态与关联品；**习题与知识管理**负责沉淀题目、答案与思维链、知识节点、参考来源以及三类关系图谱。六个子系统拥有独立的代码目录和独立的 SQLite 数据库。
 
-当前版本：**v1.5**（新增仓库管理与工具管理子系统：`repository.db`、`tools.db`、资源地址三表模型、编程语言/支持平台、标签、关联品，以及 Markdown 描述与评价）。
+当前版本：**v1.5**（新增习题与知识管理子系统：`question_and_knowledge.db`、共享标签、三类关系类型与关系边、抽屉式编辑/查看）。
 
 ![主页面](docs/screenshots/main-v15.png)
 
@@ -27,8 +27,9 @@
 > - `data/docs.db`（书籍与文档）
 > - `data/repository.db`（仓库管理）
 > - `data/tools.db`（工具管理）
+> - `data/question_and_knowledge.db`（习题与知识管理）
 
-五个数据库互不共享领域表、标签或外键。
+六个数据库互不共享领域表、标签或外键。
 
 ### 手动启动
 
@@ -42,7 +43,8 @@ python server.py
 python server.py --config D:\configs\grs.json --port 8790 \
   --db data/my-records.db --plan-db data/my-plans.db \
   --docs-db data/my-docs.db \
-  --repository-db data/my-repository.db --tools-db data/my-tools.db --open
+  --repository-db data/my-repository.db --tools-db data/my-tools.db \
+  --qk-db data/my-qk.db --open
 ```
 
 ### 启动配置文件
@@ -58,6 +60,7 @@ python server.py --config D:\configs\grs.json --port 8790 \
   "docs_db": "data/docs.db",
   "repository_db": "data/repository.db",
   "tools_db": "data/tools.db",
+  "qk_db": "data/question_and_knowledge.db",
   "open_browser": true,
   "debug": false
 }
@@ -71,7 +74,8 @@ python server.py --config D:\configs\grs.json --port 8790 \
 | `plans_db` | string | 计划管理 SQLite 路径 |
 | `docs_db` | string | 书籍与文档 SQLite 路径 |
 | `repository_db` | string | 仓库管理 SQLite 路径 |
-| `tools_db` | string | 工具管理 SQLite 路径；五个数据库必须指向不同文件 |
+| `tools_db` | string | 工具管理 SQLite 路径 |
+| `qk_db` | string | 习题与知识管理 SQLite 路径；六个数据库必须指向不同文件 |
 | `open_browser` | boolean | 启动后是否自动打开浏览器 |
 | `debug` | boolean | 是否在后端控制台打印异常堆栈 |
 
@@ -343,7 +347,7 @@ start.bat
 
 ## 工具管理
 
-工具管理使用独立数据库 `tools.db`，与其它四个数据库完全隔离。
+工具管理使用独立数据库 `tools.db`，与其它五个数据库完全隔离。
 
 ### 工具属性
 
@@ -379,9 +383,31 @@ start.bat
 - 平台多选，标签多选；
 - 工具不能关联自己。
 
+## 习题与知识管理
+
+习题与知识管理使用独立数据库 `question_and_knowledge.db`，与其它五个数据库完全隔离。
+
+- 习题：标题、问题（Markdown）、节点类型（解答 / 证明 / 思考）、领域类型（数学 / 物理 / 计算机）、我的答案历史、每条答案的思维链历史、参考答案列表。
+- 知识：标题、一句话摘要、知识 / 我的理解 / 参考来源（Markdown）、1–5 级难度、节点类型（概念 / 原理 / 实操技能 / 长文汇总）、领域类型。
+- 标签：习题与知识共用一套标签词库；添加标签时模糊搜索已有标签，最多提示 10 个。
+- 关系：习题-习题、知识-知识、习题-知识三张独立的关系边表；每张图都有自己的关系类型定义表，预置前置依赖、包含/父子粒度、强相关、对比/易混淆、演进/替代五种关系。系统内置关系不可删除；有向且禁止成环的关系在保存时做环路校验，无向关系自动去重。
+- 界面：习题与知识列表支持标题/内容搜索、标签精确与模糊筛选、类型与难度过滤；编辑与查看均为抽屉；查看抽屉顶部可进入关系视图，关系视图按关系类型分区展示，并可直接查看、编辑或删除关联项。
+
+| 页面 | 路径 | 说明 |
+| --- | --- | --- |
+| 子系统总览 | `/qk` | 统计卡片与三个管理分区入口 |
+| 习题页面 | `/qk/questions` | 搜索、筛选、编辑 / 查看 / 删除、习题关系与习题知识关系入口 |
+| 知识页面 | `/qk/knowledge` | 搜索、筛选、编辑 / 查看 / 删除、知识关系入口 |
+| 标签管理 | `/qk/tags` | 共享标签增删改、清理孤立标签、模糊搜索 |
+| 标签模糊搜索 | `/qk/tags/search/{关键词}` | 按标签名包含匹配 |
+| 习题关系管理 | `/qk/question-relations` | 关系类型定义与关系边增删改 |
+| 知识关系管理 | `/qk/knowledge-relations` | 关系类型定义与关系边增删改 |
+| 习题知识关系管理 | `/qk/question-knowledge-relations` | 习题 ↔ 知识的关系类型与关系边 |
+| 类型管理 | `/qk/question-node-types` 等 | 习题/知识的节点类型与领域类型管理 |
+
 ## Markdown 与数学公式
 
-所有子系统的 Markdown 内容（记录字段、计划内容、文档笔记/感想、仓库与工具的描述/评价）都通过同一渲染组件 `src/components/Markdown.jsx` 输出，支持 GFM 与 LaTeX 数学公式。
+所有子系统的 Markdown 内容（记录字段、计划内容、文档笔记/感想、仓库与工具的描述/评价、习题与知识的题目/答案/知识正文）都通过同一渲染组件 `src/components/Markdown.jsx` 输出，支持 GFM 与 LaTeX 数学公式。
 
 | 写法 | 位置 | 示例 |
 | --- | --- | --- |
@@ -404,7 +430,7 @@ start.bat
 | 前端 | React 18、Ant Design 5、Vite 5 |
 | Markdown | react-markdown + remark-gfm + remark-math + rehype-katex（KaTeX） |
 | 后端 | Python 3.10+ 标准库（`http.server` + `sqlite3`） |
-| 数据库 | SQLite（WAL 模式），记录库、计划库、文档库、仓库库、工具库五库分离 |
+| 数据库 | SQLite（WAL 模式），记录库、计划库、文档库、仓库库、工具库、习题知识库六库分离 |
 | 部署 | 前端构建为 `dist/`，由 Python 后端同源托管 |
 
 后端刻意不依赖 FastAPI/Flask：本工具是单用户本地应用，标准库足够，能做到“装好 Python 就能启动”。
@@ -414,7 +440,7 @@ start.bat
 ```text
 .
 ├─ server.py                    # HTTP 路由、静态托管、启动入口
-├─ config.json                  # 启动配置：端口、五个数据库、浏览器、调试
+├─ config.json                  # 启动配置：端口、六个数据库、浏览器、调试
 ├─ .env.example                 # 数据发布配置模板（复制为 .env，.env 不入库）
 ├─ backend/
 │  ├─ common.py                 # 路径、校验、SQLite session
@@ -423,7 +449,8 @@ start.bat
 │  ├─ plans/store.py            # 计划数据层（plans.db）
 │  ├─ docs/store.py             # 书籍与文档数据层（docs.db）
 │  ├─ repositories/store.py     # 仓库管理数据层（repository.db）
-│  └─ tools/store.py            # 工具管理数据层（tools.db）
+│  ├─ tools/store.py            # 工具管理数据层（tools.db）
+│  └─ qk/                       # 习题与知识数据层与路由（question_and_knowledge.db）
 ├─ src/
 │  ├─ shell/                    # AppShell、主页面、动态导航、AppDataContext
 │  ├─ subsystems/
@@ -431,7 +458,8 @@ start.bat
 │  │  ├─ plans/                 # 计划页面、API、表单/详情/弹窗
 │  │  ├─ docs/                  # 文档页面、API、类型/标签/阅读历史/书籍笔记组件
 │  │  ├─ repositories/          # 仓库列表、语言/标签管理、表单与详情
-│  │  └─ tools/                 # 工具列表、平台/标签管理、表单与详情
+│  │  ├─ tools/                 # 工具列表、平台/标签管理、表单与详情
+│  │  └─ qk/                    # 习题/知识列表、类型/标签/关系管理、抽屉组件
 │  ├─ components/               # 跨子系统共享组件（Markdown、标题、标签、
 │  │                            # 模糊标签选择、资源地址与关联品编辑器等）
 │  ├─ api.js                    # 记录 API + 通用 request
@@ -526,6 +554,7 @@ tools 1 ─── n tool_resources
 | `docs.db` | `doc_types`、`documents`、`doc_reading_history`、`doc_tags`、`doc_tag_links`、`note_types`、`book_notes`、`note_tags`、`note_tag_links`、`app_meta` |
 | `repository.db` | `repositories`、`repository_resources`、`repository_languages`、`repository_language_links`、`repository_tags`、`repository_tag_links`、`repository_relations`、`app_meta` |
 | `tools.db` | `tools`、`tool_resources`、`tool_platforms`、`tool_platform_links`、`tool_tags`、`tool_tag_links`、`tool_relations`、`app_meta` |
+| `question_and_knowledge.db` | `questions`、`question_node_types`、`question_domain_types`、`question_answers`、`answer_thoughts`、`question_ref_answers`、`knowledge`、`knowledge_node_types`、`knowledge_domain_types`、`tags`、`question_tag_links`、`knowledge_tag_links`、三类 `*_relation_types` 与 `*_relations`、`app_meta` |
 
 关键约束：
 
@@ -540,7 +569,7 @@ tools 1 ─── n tool_resources
 - 默认编程语言与默认支持平台只在首次建库时写入，之后可在管理页自由增删。
 - `repository_relations` 对 `(repository_id, related_repository_id)` 唯一；`tool_relations` 对 `(tool_id, related_tool_id)` 唯一，且应用层拒绝自关联。
 - 删除仓库或工具会级联删除其资源地址、语言/平台关联、标签关联和关联品记录。
-- 五库之间没有跨库外键；主页面统计通过五个独立连接分别读取。备份/迁移时五个文件要一起处理。
+- 六库之间没有跨库外键；主页面统计通过六个独立连接分别读取。备份/迁移时六个文件要一起处理。
 
 ## API 摘要
 
@@ -550,8 +579,8 @@ tools 1 ─── n tool_resources
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/health` | 健康检查（版本、五个数据库列表） |
-| GET | `/api/overview` | 主页面统计：记录 + 计划 + 文档 + 仓库 + 工具 |
+| GET | `/api/health` | 健康检查（版本、六个数据库列表） |
+| GET | `/api/overview` | 主页面统计：记录 + 计划 + 文档 + 仓库 + 工具 + 习题知识 |
 
 ### 通用记录
 
@@ -855,7 +884,7 @@ git config --global https.proxy http://127.0.0.1:7890
 | 现象 | 处理 |
 | --- | --- |
 | 端口被占用 | 编辑 `config.json` 的 `port`，或 `set GRS_PORT=8790` 后重新运行 `start.bat` |
-| 启动提示 Invalid startup configuration | 检查 `config.json` 的 JSON 语法、字段名、端口范围；五个数据库不能指向同一文件 |
+| 启动提示 Invalid startup configuration | 检查 `config.json` 的 JSON 语法、字段名、端口范围；六个数据库不能指向同一文件 |
 | 配置改了但没生效 | 环境变量 / CLI 优先级高于 `config.json`；检查是否设置了 `GRS_PORT`、`GRS_DB`、`GRS_DOCS_DB`、`GRS_REPOSITORY_DB`、`GRS_TOOLS_DB` 等 |
 | 提示 Python 未找到 | 安装 Python 3.10+，勾选 “Add python.exe to PATH” |
 | 页面显示 “Frontend build not found” | 运行 `npm install && npm run build`，或重新运行 `start.bat` |

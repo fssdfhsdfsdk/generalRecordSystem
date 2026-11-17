@@ -153,6 +153,7 @@ class ApiTestCase(unittest.TestCase):
                 "docs.db",
                 "repository.db",
                 "tools.db",
+                "question_and_knowledge.db",
             ],
         )
         self.assertEqual(data["version"], "1.5.0")

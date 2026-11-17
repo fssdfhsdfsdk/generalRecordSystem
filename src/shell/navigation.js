@@ -11,6 +11,7 @@ export const PLANS_PREFIXES = new Set(['plans'])
 export const DOCS_PREFIXES = new Set(['docs'])
 export const REPOSITORY_PREFIXES = new Set(['repositories'])
 export const TOOL_PREFIXES = new Set(['tools'])
+export const QK_PREFIXES = new Set(['qk'])
 
 export function subsystemOf(segments) {
   if (!segments.length) return 'home'
@@ -19,6 +20,7 @@ export function subsystemOf(segments) {
   if (DOCS_PREFIXES.has(segments[0])) return 'docs'
   if (REPOSITORY_PREFIXES.has(segments[0])) return 'repositories'
   if (TOOL_PREFIXES.has(segments[0])) return 'tools'
+  if (QK_PREFIXES.has(segments[0])) return 'qk'
   return 'unknown'
 }
 
@@ -88,6 +90,24 @@ export function pageTitle(segments, types = [], docTypes = []) {
     if (segments[1] === 'tags') return '工具标签管理'
     return '工具管理'
   }
+  if (segments[0] === 'qk') {
+    if (segments.length === 1) return '习题与知识管理'
+    if (segments[1] === 'questions') return '习题管理'
+    if (segments[1] === 'knowledge') return '知识管理'
+    if (segments[1] === 'tags') {
+      return segments[2] === 'search' ? '标签模糊搜索' : '标签管理'
+    }
+    if (segments[1] === 'question-relations') return '习题关系管理'
+    if (segments[1] === 'knowledge-relations') return '知识关系管理'
+    if (segments[1] === 'question-knowledge-relations') return '习题知识关系管理'
+    const typeMeta = {
+      'question-node-types': '习题节点类型管理',
+      'question-domain-types': '习题领域类型管理',
+      'knowledge-node-types': '知识节点类型管理',
+      'knowledge-domain-types': '知识领域类型管理',
+    }
+    return typeMeta[segments[1]] || '习题与知识管理'
+  }
   return '未找到'
 }
 
@@ -150,6 +170,18 @@ export function breadcrumb(segments, types = [], docTypes = []) {
   }
   if (subsystem === 'tools') {
     return ['拾录', '工具管理', pageTitle(segments, types, docTypes)]
+  }
+  if (subsystem === 'qk') {
+    if (segments.length === 1) return ['拾录', '习题与知识', '子系统总览']
+    const section =
+      segments[1] === 'questions'
+        ? '习题管理'
+        : segments[1] === 'knowledge'
+          ? '知识管理'
+          : segments[1] === 'tags'
+            ? '标签管理'
+            : '关系与类型管理'
+    return ['拾录', '习题与知识', section, pageTitle(segments, types, docTypes)]
   }
   return ['拾录', '未找到']
 }

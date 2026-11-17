@@ -8,4 +8,5 @@ database file:
 * ``backend.docs``         -> ``data/docs.db``
 * ``backend.repositories`` -> ``data/repository.db``
 * ``backend.tools``        -> ``data/tools.db``
+* ``backend.qk``           -> ``data/question_and_knowledge.db``
 """

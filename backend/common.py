@@ -16,6 +16,7 @@ DEFAULT_PLAN_DB = DATA_DIR / "plans.db"
 DEFAULT_DOC_DB = DATA_DIR / "docs.db"
 DEFAULT_REPOSITORY_DB = DATA_DIR / "repository.db"
 DEFAULT_TOOLS_DB = DATA_DIR / "tools.db"
+DEFAULT_QK_DB = DATA_DIR / "question_and_knowledge.db"
 
 MAX_BODY_BYTES = 4 * 1024 * 1024
 MAX_TITLE = 255

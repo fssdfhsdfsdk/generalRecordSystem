@@ -4,14 +4,18 @@ import {
   BookOutlined,
   CalendarOutlined,
   DatabaseOutlined,
+  ClusterOutlined,
   EditOutlined,
+  ExperimentOutlined,
   FileTextOutlined,
   FlagOutlined,
   GithubOutlined,
   HomeOutlined,
+  LinkOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   ProjectOutlined,
+  QuestionCircleOutlined,
   ReadOutlined,
   SettingOutlined,
   TagsOutlined,
@@ -56,8 +60,26 @@ import ToolListPage from '../subsystems/tools/pages/ToolListPage'
 import ToolFuzzyTagPage from '../subsystems/tools/pages/ToolFuzzyTagPage'
 import ToolTagsPage from '../subsystems/tools/pages/ToolTagsPage'
 import ToolPlatformsPage from '../subsystems/tools/pages/ToolPlatformsPage'
+import QkOverviewPage from '../subsystems/qk/pages/QkOverviewPage'
+import QuestionListPage from '../subsystems/qk/pages/QuestionListPage'
+import KnowledgeListPage from '../subsystems/qk/pages/KnowledgeListPage'
+import QkTagsPage from '../subsystems/qk/pages/TagsPage'
+import QkTypeManagePage from '../subsystems/qk/pages/TypeManagePage'
+import QkRelationManagePage from '../subsystems/qk/pages/RelationManagePage'
 
 const { Sider, Header, Content } = Layout
+
+const QK_TYPE_KEYS = new Set([
+  'question-node-types',
+  'question-domain-types',
+  'knowledge-node-types',
+  'knowledge-domain-types',
+])
+const QK_GRAPH_KEYS = new Set([
+  'question-relations',
+  'knowledge-relations',
+  'question-knowledge-relations',
+])
 
 function parseListParam(value) {
   return String(value || '')
@@ -122,6 +144,16 @@ export default function AppShell() {
       if (route.segments[1] === 'tag-search') return '/tools/tag-search'
       if (route.segments[1] === 'tags') return '/tools/tags'
       return '/tools'
+    }
+    if (route.segments[0] === 'qk') {
+      const second = route.segments[1]
+      if (second && (QK_TYPE_KEYS.has(second) || QK_GRAPH_KEYS.has(second))) {
+        return `/qk/${second}`
+      }
+      if (second === 'tags') return '/qk/tags'
+      if (second === 'questions') return '/qk/questions'
+      if (second === 'knowledge') return '/qk/knowledge'
+      return '/qk'
     }
     return '/'
   }, [route.segments])
@@ -308,6 +340,77 @@ export default function AppShell() {
           },
         ],
       })
+    } else if (subsystem === 'qk') {
+      items.push({
+        key: 'qk-questions',
+        type: 'group',
+        label: '习题管理',
+        children: [
+          { key: '/qk/questions', icon: <QuestionCircleOutlined />, label: '习题页面' },
+          {
+            key: '/qk/question-relations',
+            icon: <ClusterOutlined />,
+            label: '习题关系管理',
+          },
+          {
+            key: '/qk/question-knowledge-relations',
+            icon: <LinkOutlined />,
+            label: '习题知识关系管理',
+          },
+          {
+            key: '/qk/question-node-types',
+            icon: <SettingOutlined />,
+            label: '习题节点类型管理',
+          },
+          {
+            key: '/qk/question-domain-types',
+            icon: <SettingOutlined />,
+            label: '习题领域类型管理',
+          },
+          { key: '/qk/tags', icon: <TagsOutlined />, label: '习题标签管理' },
+          {
+            key: '/qk/tags/search',
+            icon: <TagsOutlined />,
+            label: '习题标签模糊搜索',
+          },
+        ],
+      })
+      items.push({
+        key: 'qk-knowledge',
+        type: 'group',
+        label: '知识管理',
+        children: [
+          { key: '/qk/knowledge', icon: <ReadOutlined />, label: '知识页面' },
+          {
+            key: '/qk/knowledge-relations',
+            icon: <ClusterOutlined />,
+            label: '知识关系管理',
+          },
+          {
+            key: '/qk/knowledge-node-types',
+            icon: <SettingOutlined />,
+            label: '知识节点类型管理',
+          },
+          {
+            key: '/qk/knowledge-domain-types',
+            icon: <SettingOutlined />,
+            label: '知识领域类型管理',
+          },
+        ],
+      })
+      items.push({
+        key: 'qk-tags',
+        type: 'group',
+        label: '标签管理',
+        children: [
+          { key: '/qk/tags', icon: <TagsOutlined />, label: '标签管理' },
+          {
+            key: '/qk/tags/search',
+            icon: <TagsOutlined />,
+            label: '标签模糊搜索',
+          },
+        ],
+      })
     } else {
       items.push({
         key: 'systems',
@@ -323,6 +426,11 @@ export default function AppShell() {
             label: '仓库管理',
           },
           { key: '/tools', icon: <ToolOutlined />, label: '工具管理' },
+          {
+            key: '/qk',
+            icon: <ExperimentOutlined />,
+            label: '习题与知识管理',
+          },
         ],
       })
     }
@@ -508,6 +616,43 @@ export default function AppShell() {
         return <DocContentPage key={route.segments[1]} documentId={route.segments[1]} />
       }
     }
+    if (route.segments[0] === 'qk') {
+      if (route.segments.length === 1) return <QkOverviewPage />
+      const second = route.segments[1]
+      if (second === 'questions') {
+        return (
+          <QuestionListPage
+            key={`qk-questions:${route.query.toString()}`}
+            initialTags={parseListParam(route.query.get('tags'))}
+            initialFocus={route.query.get('focus')}
+          />
+        )
+      }
+      if (second === 'knowledge') {
+        return (
+          <KnowledgeListPage
+            key={`qk-knowledge:${route.query.toString()}`}
+            initialTags={parseListParam(route.query.get('tags'))}
+            initialFocus={route.query.get('focus')}
+          />
+        )
+      }
+      if (second === 'tags') {
+        return (
+          <QkTagsPage
+            key={`qk-tags:${route.segments.slice(2).join('/')}`}
+            initialQuery={route.segments[2] === 'search' ? route.segments.slice(3).join('/') : ''}
+          />
+        )
+      }
+      if (QK_TYPE_KEYS.has(second)) {
+        return <QkTypeManagePage key={second} category={second} />
+      }
+      if (QK_GRAPH_KEYS.has(second)) {
+        return <QkRelationManagePage key={second} graph={second} />
+      }
+      return <QkOverviewPage />
+    }
     return (
       <div className="not-found">
         <div className="not-found-code">404</div>
@@ -555,7 +700,7 @@ export default function AppShell() {
             <span className="brand-copy">
               <span className="brand-name">拾录</span>
               <span className="brand-sub">
-                RECORDS · PLANS · DOCS · REPOS · TOOLS
+                RECORDS · PLANS · DOCS · REPOS · TOOLS · Q/K
               </span>
             </span>
           </button>
@@ -583,10 +728,10 @@ export default function AppShell() {
           <div className="sider-footer">
             <div className="sider-footer-row">
               <DatabaseOutlined />
-              <span>SQLite · 五库隔离</span>
+              <span>SQLite · 六库隔离</span>
             </div>
             <div className="sider-footer-meta">
-              records.db / plans.db / docs.db / repository.db / tools.db
+              records.db / plans.db / docs.db / repository.db / tools.db / qk.db
             </div>
           </div>
         </div>
@@ -622,10 +767,10 @@ export default function AppShell() {
             </div>
           </div>
           <div className="header-right">
-            <Tooltip title="records.db / plans.db / docs.db / repository.db / tools.db，五个数据库完全隔离">
+            <Tooltip title="records.db / plans.db / docs.db / repository.db / tools.db / question_and_knowledge.db，六个数据库完全隔离">
               <span className="status-pill">
                 <span className="status-dot" />
-                五库隔离
+                六库隔离
               </span>
             </Tooltip>
           </div>

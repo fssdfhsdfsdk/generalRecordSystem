@@ -6,6 +6,7 @@
   "docs_db": "data/docs.db",
   "repository_db": "data/repository.db",
   "tools_db": "data/tools.db",
+  "qk_db": "data/question_and_knowledge.db",
   "open_browser": true,
   "debug": false
 }

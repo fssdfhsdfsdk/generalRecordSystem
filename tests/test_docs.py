@@ -643,6 +643,7 @@ class DocApiTestCase(unittest.TestCase):
                 "docs.db",
                 "repository.db",
                 "tools.db",
+                "question_and_knowledge.db",
             ],
         )
         self.assertEqual(health["version"], "1.5.0")

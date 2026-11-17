@@ -22,6 +22,7 @@ from .common import (
     DEFAULT_DB,
     DEFAULT_DOC_DB,
     DEFAULT_PLAN_DB,
+    DEFAULT_QK_DB,
     DEFAULT_REPOSITORY_DB,
     DEFAULT_TOOLS_DB,
     ROOT,
@@ -36,6 +37,7 @@ ALLOWED_KEYS = {
     "docs_db",
     "repository_db",
     "tools_db",
+    "qk_db",
     "open_browser",
     "debug",
 }
@@ -56,6 +58,7 @@ class AppConfig:
     docs_db: Path
     repository_db: Path
     tools_db: Path
+    qk_db: Path
     open_browser: bool
     debug: bool
     source: Path | None = None
@@ -177,6 +180,7 @@ def load_config(
         "repository_db", str(DEFAULT_REPOSITORY_DB.relative_to(ROOT))
     )
     tools_raw = take("tools_db", str(DEFAULT_TOOLS_DB.relative_to(ROOT)))
+    qk_raw = take("qk_db", str(DEFAULT_QK_DB.relative_to(ROOT)))
     open_browser = _as_bool(take("open_browser", True), "open_browser")
     debug = _as_bool(take("debug", False), "debug")
 
@@ -185,6 +189,7 @@ def load_config(
     docs_db = _as_path(docs_raw, "docs_db", base)
     repository_db = _as_path(repository_raw, "repository_db", base)
     tools_db = _as_path(tools_raw, "tools_db", base)
+    qk_db = _as_path(qk_raw, "qk_db", base)
 
     if "GRS_HOST" in env:
         host = _as_text(env["GRS_HOST"], "GRS_HOST")
@@ -209,6 +214,9 @@ def load_config(
     if "GRS_TOOLS_DB" in env:
         tools_db = _as_path(env["GRS_TOOLS_DB"], "GRS_TOOLS_DB", Path.cwd())
         overrides.append("GRS_TOOLS_DB")
+    if "GRS_QK_DB" in env:
+        qk_db = _as_path(env["GRS_QK_DB"], "GRS_QK_DB", Path.cwd())
+        overrides.append("GRS_QK_DB")
     if "GRS_OPEN_BROWSER" in env:
         open_browser = _as_bool(env["GRS_OPEN_BROWSER"], "GRS_OPEN_BROWSER")
         overrides.append("GRS_OPEN_BROWSER")
@@ -216,11 +224,11 @@ def load_config(
         debug = _as_bool(env["GRS_DEBUG"], "GRS_DEBUG")
         overrides.append("GRS_DEBUG")
 
-    all_paths = {records_db, plans_db, docs_db, repository_db, tools_db}
-    if len(all_paths) != 5:
+    all_paths = {records_db, plans_db, docs_db, repository_db, tools_db, qk_db}
+    if len(all_paths) != 6:
         raise ConfigError(
-            "records_db, plans_db, docs_db, repository_db and tools_db "
-            "must be five different files"
+            "records_db, plans_db, docs_db, repository_db, tools_db and qk_db "
+            "must be six different files"
         )
 
     return AppConfig(
@@ -231,6 +239,7 @@ def load_config(
         docs_db=docs_db,
         repository_db=repository_db,
         tools_db=tools_db,
+        qk_db=qk_db,
         open_browser=open_browser,
         debug=debug,
         source=source,

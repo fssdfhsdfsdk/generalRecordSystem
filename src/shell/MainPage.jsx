@@ -6,6 +6,7 @@ import {
   CalendarOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
+  ExperimentOutlined,
   GithubOutlined,
   PlusOutlined,
   ProjectOutlined,
@@ -67,6 +68,18 @@ const EMPTY = {
     relations: 0,
     recent: [],
   },
+  qk: {
+    questions: 0,
+    knowledge: 0,
+    tags: 0,
+    answers: 0,
+    question_relations: 0,
+    knowledge_relations: 0,
+    question_knowledge_relations: 0,
+    avg_difficulty: 0,
+    recent_questions: [],
+    recent_knowledge: [],
+  },
 }
 
 export default function MainPage() {
@@ -98,6 +111,11 @@ export default function MainPage() {
   const docs = data.docs || EMPTY.docs
   const repositories = data.repositories || EMPTY.repositories
   const tools = data.tools || EMPTY.tools
+  const qk = data.qk || EMPTY.qk
+  const qkRelations =
+    (qk.question_relations || 0) +
+    (qk.knowledge_relations || 0) +
+    (qk.question_knowledge_relations || 0)
   const activePlans =
     (plans.by_status?.in_progress || 0) +
     (plans.by_status?.overdue || 0) +
@@ -110,7 +128,7 @@ export default function MainPage() {
         <div className="main-hero-glow main-hero-glow-b" />
         <div className="main-hero-copy">
           <span className="hero-kicker">
-            <ThunderboltOutlined /> 本地工作台 · 五库隔离 · 一个入口
+            <ThunderboltOutlined /> 本地工作台 · 六库隔离 · 一个入口
           </span>
           <h1>
             把记录收好，
@@ -120,7 +138,8 @@ export default function MainPage() {
           <p>
             通用记录保存事实、问答与根因；计划管理拆解目标、记录时间与进度；
             书籍与文档管理收拢书、论文、文章、规范与办公材料；仓库管理与工具管理整理技术资源、
-            平台、标签和关联品。五个子系统各自拥有独立的数据文件，互不干扰。
+            平台、标签和关联品；习题与知识管理沉淀答案思路、知识节点与关系图谱。
+            六个子系统各自拥有独立的数据文件，互不干扰。
           </p>
           <div className="main-hero-actions">
             <Button
@@ -163,6 +182,14 @@ export default function MainPage() {
             >
               进入工具管理
             </Button>
+            <Button
+              size="large"
+              className="hero-ghost-button hero-ghost-qk"
+              icon={<ExperimentOutlined />}
+              onClick={() => navigate('/qk')}
+            >
+              进入习题与知识
+            </Button>
           </div>
         </div>
 
@@ -202,6 +229,11 @@ export default function MainPage() {
                   <span>工具</span>
                   <strong>{tools.total}</strong>
                   <small>{tools.open_source} 个开源</small>
+                </div>
+                <div className="main-pulse-item">
+                  <span>习题 / 知识</span>
+                  <strong>{qk.questions + qk.knowledge}</strong>
+                  <small>{qkRelations} 条关系</small>
                 </div>
                 <div className="main-pulse-item">
                   <span>完成度</span>
@@ -397,6 +429,42 @@ export default function MainPage() {
             <span>标签筛选</span>
           </div>
         </button>
+
+        <button
+          type="button"
+          className="subsystem-card subsystem-qk"
+          onClick={() => navigate('/qk')}
+        >
+          <div className="subsystem-card-top">
+            <span className="subsystem-icon">
+              <ExperimentOutlined />
+            </span>
+            <span className="subsystem-arrow">
+              <ArrowRightOutlined />
+            </span>
+          </div>
+          <div className="subsystem-kicker">QUESTIONS & KNOWLEDGE</div>
+          <h2>习题与知识管理</h2>
+          <p>
+            记录题目、我的答案与思维链；沉淀知识、理解与参考来源，用三类关系和共享标签连成网络。
+          </p>
+          <div className="subsystem-stats">
+            <span>
+              <strong>{qk.questions}</strong> 道习题
+            </span>
+            <span>
+              <strong>{qk.knowledge}</strong> 条知识
+            </span>
+            <span>
+              <strong>{qk.tags}</strong> 个标签
+            </span>
+          </div>
+          <div className="subsystem-chips">
+            <span>答案历史</span>
+            <span>知识图谱</span>
+            <span>共享标签</span>
+          </div>
+        </button>
       </section>
 
       <section className="main-stat-strip">
@@ -440,6 +508,13 @@ export default function MainPage() {
           <div>
             <span>工具总量</span>
             <strong>{tools.total}</strong>
+          </div>
+        </div>
+        <div className="main-stat">
+          <ExperimentOutlined />
+          <div>
+            <span>习题 / 知识</span>
+            <strong>{qk.questions + qk.knowledge}</strong>
           </div>
         </div>
       </section>
@@ -615,6 +690,71 @@ export default function MainPage() {
                 onClick={() => navigate('/docs')}
               >
                 添加第一篇
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <div className="main-recent-card">
+          <div className="section-heading compact">
+            <div>
+              <div className="eyebrow">RECENT QUESTIONS & KNOWLEDGE</div>
+              <h2>最近习题与知识</h2>
+            </div>
+            <Button type="text" onClick={() => navigate('/qk')}>
+              全部 <ArrowRightOutlined />
+            </Button>
+          </div>
+          {loading ? (
+            <Skeleton active paragraph={{ rows: 3 }} />
+          ) : qk.recent_questions.length || qk.recent_knowledge.length ? (
+            <div className="main-recent-list">
+              {qk.recent_questions.map((item) => (
+                <button
+                  type="button"
+                  className="main-recent-row"
+                  key={`q-${item.id}`}
+                  onClick={() => navigate('/qk/questions')}
+                >
+                  <ExperimentOutlined />
+                  <span className="main-recent-main">
+                    <span className="main-recent-title">
+                      <TitleText text={item.title} maxChars={38} />
+                    </span>
+                    <span className="main-recent-meta">
+                      习题 · {item.node_type_name || '未分类'}
+                    </span>
+                  </span>
+                </button>
+              ))}
+              {qk.recent_knowledge.map((item) => (
+                <button
+                  type="button"
+                  className="main-recent-row"
+                  key={`k-${item.id}`}
+                  onClick={() => navigate('/qk/knowledge')}
+                >
+                  <ExperimentOutlined />
+                  <span className="main-recent-main">
+                    <span className="main-recent-title">
+                      <TitleText text={item.title} maxChars={38} />
+                    </span>
+                    <span className="main-recent-meta">
+                      知识 · 难度 {item.difficulty}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="main-empty">
+              <p>还没有习题或知识。</p>
+              <Button
+                size="small"
+                icon={<PlusOutlined />}
+                onClick={() => navigate('/qk')}
+              >
+                开始记录
               </Button>
             </div>
           )}

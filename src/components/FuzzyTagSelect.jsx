@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { Select } from 'antd'
 
 // Show up to 100 tags at once. Only beyond that does Ant Design collapse the
@@ -14,9 +14,11 @@ export default function FuzzyTagSelect({
   allowCreate = true,
   className = '',
   tokenSeparators = [' ', ',', '，', ';', '；'],
+  maxOptions = 0,
   id,
 }) {
   const [expanded, setExpanded] = useState(false)
+  const [search, setSearch] = useState('')
   const shellRef = useRef(null)
   const tagCount = Array.isArray(value) ? value.length : 0
   const collapsed = tagCount > MAX_VISIBLE_TAGS && !expanded
@@ -28,11 +30,31 @@ export default function FuzzyTagSelect({
     if (selector) selector.scrollTop = selector.scrollHeight
   }
 
-  const normalized = (options || []).map((item) =>
-    typeof item === 'string'
-      ? { value: item, label: item }
-      : { value: item.value ?? item.name, label: item.label ?? item.name },
+  const normalized = useMemo(
+    () =>
+      (options || []).map((item) =>
+        typeof item === 'string'
+          ? { value: item, label: item }
+          : { value: item.value ?? item.name, label: item.label ?? item.name },
+      ),
+    [options],
   )
+
+  // Cap the number of suggestions shown while adding a tag. Existing subsystems
+  // keep the old behaviour because maxOptions defaults to 0.
+  const visibleOptions = useMemo(() => {
+    if (!maxOptions) return normalized
+    const keyword = search.trim().toLocaleLowerCase()
+    const matched = keyword
+      ? normalized.filter((item) =>
+          String(item.label ?? item.value)
+            .toLocaleLowerCase()
+            .includes(keyword),
+        )
+      : normalized
+    return matched.slice(0, maxOptions)
+  }, [maxOptions, normalized, search])
+
   return (
     <div ref={shellRef} className={`tag-select-shell ${className}`.trim()}>
       <Select
@@ -52,12 +74,16 @@ export default function FuzzyTagSelect({
           })
           onChange?.(result)
         }}
-        options={normalized}
+        options={visibleOptions}
         showSearch
-        filterOption={(input, option) =>
-          String(option?.label ?? option?.value ?? '')
-            .toLocaleLowerCase()
-            .includes(input.trim().toLocaleLowerCase())
+        onSearch={setSearch}
+        filterOption={
+          maxOptions
+            ? false
+            : (input, option) =>
+                String(option?.label ?? option?.value ?? '')
+                  .toLocaleLowerCase()
+                  .includes(input.trim().toLocaleLowerCase())
         }
         tokenSeparators={tokenSeparators}
         placeholder={placeholder}

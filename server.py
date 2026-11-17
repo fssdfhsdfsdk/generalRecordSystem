@@ -10,8 +10,11 @@ Subsystems are isolated in both code and storage:
 * general records -> backend.records -> data/records.db
 * plan management -> backend.plans   -> data/plans.db
 * books & documents -> backend.docs  -> data/docs.db
+* repositories      -> backend.repositories -> data/repository.db
+* tools             -> backend.tools  -> data/tools.db
+* questions & knowledge -> backend.qk -> data/question_and_knowledge.db
 
-The three SQLite files never share tables, tags or foreign keys.
+The six SQLite files never share tables, tags or foreign keys.
 """
 
 from __future__ import annotations
@@ -36,6 +39,7 @@ from backend.common import (  # noqa: F401 - compatibility re-exports
     DEFAULT_DB,
     DEFAULT_DOC_DB,
     DEFAULT_PLAN_DB,
+    DEFAULT_QK_DB,
     DEFAULT_REPOSITORY_DB,
     DEFAULT_TOOLS_DB,
     DIST_DIR,
@@ -48,6 +52,8 @@ from backend.common import (  # noqa: F401 - compatibility re-exports
 from backend.config import ConfigError, load_config
 from backend.docs import store as docs_store
 from backend.plans import store as plans_store
+from backend.qk import api as qk_api
+from backend.qk import store as qk_store
 from backend.records import store as records_store
 from backend.repositories import store as repositories_store
 from backend.tools import store as tools_store
@@ -73,6 +79,7 @@ class Handler(BaseHTTPRequestHandler):
     docs_db_path: Path = DEFAULT_DOC_DB
     repository_db_path: Path = DEFAULT_REPOSITORY_DB
     tools_db_path: Path = DEFAULT_TOOLS_DB
+    qk_db_path: Path = DEFAULT_QK_DB
     debug: bool = False
     protocol_version = "HTTP/1.1"
 
@@ -184,6 +191,7 @@ class Handler(BaseHTTPRequestHandler):
                         "docs.db",
                         "repository.db",
                         "tools.db",
+                        "question_and_knowledge.db",
                     ],
                 }
             )
@@ -200,6 +208,8 @@ class Handler(BaseHTTPRequestHandler):
                 repository_stats = repositories_store.get_stats(conn)
             with db_session(self.tools_db_path) as conn:
                 tool_stats = tools_store.get_stats(conn)
+            with db_session(self.qk_db_path) as conn:
+                qk_stats = qk_store.get_stats(conn)
             self._send_json(
                 {
                     "records": record_stats,
@@ -207,6 +217,7 @@ class Handler(BaseHTTPRequestHandler):
                     "docs": doc_stats,
                     "repositories": repository_stats,
                     "tools": tool_stats,
+                    "qk": qk_stats,
                 }
             )
             return
@@ -864,6 +875,14 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(result)
                 return
 
+        # -- questions & knowledge -----------------------------------------
+        if path == "/api/qk" or path.startswith("/api/qk/"):
+            body = self._read_json() if method in ("POST", "PUT") else None
+            with db_session(self.qk_db_path) as conn:
+                result, status = qk_api.dispatch(conn, method, path, q, body)
+            self._send_json(result, status)
+            return
+
         raise ApiError(404, "接口不存在", "not_found")
 
     # -- static files ------------------------------------------------------
@@ -933,6 +952,7 @@ def make_handler(
     debug: bool = False,
     repository_db_path: Path = DEFAULT_REPOSITORY_DB,
     tools_db_path: Path = DEFAULT_TOOLS_DB,
+    qk_db_path: Path = DEFAULT_QK_DB,
 ):
     class BoundHandler(Handler):
         pass
@@ -942,6 +962,7 @@ def make_handler(
     BoundHandler.docs_db_path = Path(docs_db_path)
     BoundHandler.repository_db_path = Path(repository_db_path)
     BoundHandler.tools_db_path = Path(tools_db_path)
+    BoundHandler.qk_db_path = Path(qk_db_path)
     BoundHandler.debug = debug
     return BoundHandler
 
@@ -972,6 +993,7 @@ def create_server(
     docs_db_path: Path | None = None,
     repository_db_path: Path | None = None,
     tools_db_path: Path | None = None,
+    qk_db_path: Path | None = None,
 ) -> AppHTTPServer:
     db_path = Path(db_path)
     if plan_db_path is None:
@@ -986,23 +1008,28 @@ def create_server(
     if tools_db_path is None:
         tools_db_path = db_path.parent / "tools.db"
     tools_db_path = Path(tools_db_path)
+    if qk_db_path is None:
+        qk_db_path = db_path.parent / "question_and_knowledge.db"
+    qk_db_path = Path(qk_db_path)
     paths = {
         db_path.resolve(),
         plan_db_path.resolve(),
         docs_db_path.resolve(),
         repository_db_path.resolve(),
         tools_db_path.resolve(),
+        qk_db_path.resolve(),
     }
-    if len(paths) != 5:
+    if len(paths) != 6:
         raise ValueError(
-            "records.db, plans.db, docs.db, repository.db and tools.db "
-            "must be five different files"
+            "records.db, plans.db, docs.db, repository.db, tools.db and "
+            "question_and_knowledge.db must be six different files"
         )
     records_store.init_db(db_path)
     plans_store.init_db(plan_db_path)
     docs_store.init_db(docs_db_path)
     repositories_store.init_db(repository_db_path)
     tools_store.init_db(tools_db_path)
+    qk_store.init_db(qk_db_path)
     server = AppHTTPServer(
         (host, port),
         make_handler(
@@ -1012,6 +1039,7 @@ def create_server(
             debug,
             repository_db_path,
             tools_db_path,
+            qk_db_path,
         ),
     )
     return server
@@ -1046,6 +1074,11 @@ def main() -> int:
     )
     parser.add_argument(
         "--tools-db", default=None, help="tools SQLite path (default from config)"
+    )
+    parser.add_argument(
+        "--qk-db",
+        default=None,
+        help="questions & knowledge SQLite path (default from config)",
     )
     open_group = parser.add_mutually_exclusive_group()
     open_group.add_argument(
@@ -1118,12 +1151,24 @@ def main() -> int:
         if args.tools_db is not None
         else cfg.tools_db
     )
+    qk_db_path = (
+        Path(args.qk_db).expanduser().resolve()
+        if args.qk_db is not None
+        else cfg.qk_db
+    )
     if len(
-        {db_path, plan_db_path, docs_db_path, repository_db_path, tools_db_path}
-    ) != 5:
+        {
+            db_path,
+            plan_db_path,
+            docs_db_path,
+            repository_db_path,
+            tools_db_path,
+            qk_db_path,
+        }
+    ) != 6:
         print(
-            "[ERROR] records, plans, docs, repository and tools must use "
-            "five different database files."
+            "[ERROR] records, plans, docs, repository, tools and qk must use "
+            "six different database files."
         )
         return 1
 
@@ -1143,6 +1188,7 @@ def main() -> int:
             ("--docs-db", args.docs_db),
             ("--repository-db", args.repository_db),
             ("--tools-db", args.tools_db),
+            ("--qk-db", args.qk_db),
             ("--open/--no-open", args.open_browser),
             ("--debug", args.debug),
         )
@@ -1160,6 +1206,7 @@ def main() -> int:
             docs_db_path,
             repository_db_path,
             tools_db_path,
+            qk_db_path,
         )
     except ValueError as exc:
         print(f"[ERROR] Invalid database configuration: {exc}")
@@ -1185,6 +1232,7 @@ def main() -> int:
     print(f"  Docs     : {docs_db_path}")
     print(f"  Repos    : {repository_db_path}")
     print(f"  Tools    : {tools_db_path}")
+    print(f"  Q/K      : {qk_db_path}")
     print(f"  Browser  : {'open' if open_browser else 'manual'}")
     print("  Stop     : Ctrl+C")
     print("=" * 58)
