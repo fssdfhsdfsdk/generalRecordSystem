@@ -25,7 +25,7 @@ import {
   SettingOutlined,
 } from '@ant-design/icons'
 import { qkApi } from '../api'
-import { GRAPHS } from '../qkMeta'
+import { graphMeta } from '../qkMeta'
 import PageHeader from '../../../components/PageHeader'
 
 const EMPTY_TYPE = {
@@ -55,7 +55,7 @@ const nodeOptions = (list = []) =>
 
 export default function RelationManagePage({ graph }) {
   const { message } = AntApp.useApp()
-  const meta = GRAPHS[graph] || GRAPHS.question
+  const meta = graphMeta(graph)
   const [types, setTypes] = useState([])
   const [edges, setEdges] = useState([])
   const [questions, setQuestions] = useState([])

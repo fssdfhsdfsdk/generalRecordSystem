@@ -19,17 +19,14 @@ import {
   SettingOutlined,
 } from '@ant-design/icons'
 import { qkApi } from '../api'
-import { TYPE_CATEGORIES } from '../qkMeta'
+import { typeCategoryMeta } from '../qkMeta'
 import PageHeader from '../../../components/PageHeader'
 import EmptyState from '../../../components/EmptyState'
 import EllipsisText from '../../../components/EllipsisText'
 
 export default function TypeManagePage({ category }) {
   const { message } = AntApp.useApp()
-  const meta = useMemo(
-    () => TYPE_CATEGORIES.find((item) => item.key === category) || TYPE_CATEGORIES[0],
-    [category],
-  )
+  const meta = useMemo(() => typeCategoryMeta(category), [category])
   const [types, setTypes] = useState([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')

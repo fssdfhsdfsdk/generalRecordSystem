@@ -50,6 +50,29 @@ export const GRAPHS = {
   },
 }
 
+const TYPE_CATEGORY_ALIASES = {
+  'question-node-types': 'question_node',
+  'question-domain-types': 'question_domain',
+  'knowledge-node-types': 'knowledge_node',
+  'knowledge-domain-types': 'knowledge_domain',
+}
+
+const GRAPH_ALIASES = {
+  'question-relations': 'question',
+  'knowledge-relations': 'knowledge',
+  'question-knowledge-relations': 'question_knowledge',
+}
+
+export function typeCategoryMeta(key) {
+  const normalized = TYPE_CATEGORY_ALIASES[key] || key
+  return TYPE_CATEGORIES.find((item) => item.key === normalized) || TYPE_CATEGORIES[0]
+}
+
+export function graphMeta(key) {
+  const normalized = GRAPH_ALIASES[key] || key
+  return GRAPHS[normalized] || GRAPHS.question
+}
+
 export const DIFFICULTY_OPTIONS = [
   { value: 1, label: '1 · 入门' },
   { value: 2, label: '2 · 基础' },

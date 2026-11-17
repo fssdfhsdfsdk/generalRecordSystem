@@ -1358,6 +1358,34 @@ pagination={{
 
 ---
 
+## BUG-037：点击「习题知识关系」却显示为「习题关系」管理页
+
+**描述：**
+在习题与知识管理侧边栏或习题页面点击「习题知识关系」，页面标题、eyebrow 与描述都显示为「习题关系」，看起来像跳到了「习题关系管理」。实际 URL 与接口数据并未跳错，但页面身份展示错误，用户无法区分三类关系管理页面。
+
+**背景与上下文：**
+上一轮修复（BUG-036）统一了 API 层的键名映射：前端页面把连字符路由键（如 `question-knowledge-relations`）传给 `qkApi`，API 层再映射为内部键。但前端页面元数据仍直接按内部键查找，导致三类关系管理页和四类类型管理页的标题都回退到第一项。
+
+**分析过程：**
+
+1. `AppShell.jsx` 的路由把 `graph` / `category` 作为连字符串（如 `question-knowledge-relations`、`knowledge-node-types`）传给页面组件；
+2. `RelationManagePage.jsx` 使用 `GRAPHS[graph] || GRAPHS.question`，`TypeManagePage.jsx` 使用 `TYPE_CATEGORIES.find(item => item.key === category) || TYPE_CATEGORIES[0]`；
+3. `qkMeta.js` 中 `GRAPHS` 的键为 `question` / `knowledge` / `question_knowledge`，`TYPE_CATEGORIES` 的键为 `question_node` 等下划线形式，与连字符路由键对不上；
+4. 两个页面均静默回退到第一项，因此无论进入哪一类管理页，标题都显示「习题关系」或「习题节点类型」。
+
+**根因：**
+前端页面元数据沿用了后端 internal key，而路由传的是 hyphenated 路径键；缺少统一映射且用第一项兜底，掩盖了键不匹配问题。
+
+**解决方法：**
+
+- 在 `qkMeta.js` 增加 `graphMeta()` / `typeCategoryMeta()`，先把连字符路由键映射为内部键，再查元数据；
+- `RelationManagePage.jsx` 与 `TypeManagePage.jsx` 改用上述方法，移除回退到第一项的写法；
+- 通过 Node 直接导入 `qkMeta.js` 验证 3 个关系页面与 4 个类型页面的标题映射；重新构建 `dist`。
+
+**时间：** 2026-11-17 18:02–18:06 +08:00
+
+---
+
 ## 附：验证方式
 
 | 缺陷 | 验证 |
@@ -1398,5 +1426,6 @@ pagination={{
 | BUG-034 | Node 渲染断言 + 浏览器验证：`$...$`、`$$...$$`、`\(...\)`、`\[...\]` 四种写法均生成 KaTeX 节点（2 个行内 + 2 个块级）；围栏代码块、行内代码与 `\\(` 转义保持原文；浏览器只请求 woff2 字体；console error 为 0；生产构建 3,387 modules 成功，`dist` 字体仅 19 个 woff2 + 1 个内联 woff2（约 250 KB） |
 | BUG-035 | 浏览器验证：1440px 下列表与总览点击均打开抽屉，抽屉宽 1188px（1440 − 252）、左边缘 252px，遮罩从 252px 开始且侧边栏仍可点击；关闭后筛选文本与结果保留；编辑/标签跳转正常、删除后列表由 6 行变 5 行；390px 下抽屉与遮罩均为 100vw，`--app-sider-width` 为 0；页面无横向溢出，console error 为 0 |
 | BUG-036 | `test_ui_hyphenated_routes` 通过（8 项子系统测试全绿）；HTTP 冒烟验证 6 条页面实际调用路径均返回 200；`npm run build` 生产构建成功 |
+| BUG-037 | Node 直接导入 `qkMeta.js` 验证 3 个关系页面与 4 个类型页面标题映射正确；`npm run build` 生产构建成功 |
 
 上述缺陷修复后，最终回归结果：**70 个后端测试通过（记录 19 + 计划 19 + 文档 16 + 仓库 4 + 工具 4 + 配置 8），数学公式 Node 渲染断言与浏览器验证通过，应用 console error 为 0，生产构建成功；v1.2 计划/记录浏览器断言保持通过**。
