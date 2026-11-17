@@ -1386,6 +1386,40 @@ pagination={{
 
 ---
 
+## BUG-038：习题知识关系管理页的节点下拉框仍是习题与习题，无法正确创建习题 ↔ 知识关系
+
+**描述：**
+进入「习题知识关系管理」后，新建关系弹窗的起点和终点下拉框都列出习题；用它们创建出来的关系实际上是习题与习题之间的关联，而不是习题与知识之间的关联。
+
+**背景与上下文：**
+习题与知识管理子系统有三张独立的关系图：习题关系（习题 ↔ 习题）、知识关系（知识 ↔ 知识）、习题知识关系（习题 → 知识）。后端已经按图固定了起点/终点的节点类型，但前端关系管理页面需要根据当前图选择对应节点列表。
+
+**分析过程：**
+
+1. `AppShell.jsx` 传给 `RelationManagePage` 的 `graph` 是连字符路由键 `question-knowledge-relations` / `knowledge-relations` / `question-relations`；
+2. `RelationManagePage.jsx` 用 `graph === 'knowledge' ? knowledge : questions` 与 `graph === 'question_knowledge' ? knowledge : sourceList` 判断节点列表；
+3. 两个比较都使用下划线 internal key，对连字符路由键永远不成立，因此 `sourceList` 始终为习题、`targetList` 始终等于 `sourceList`；
+4. 后端 `store.create_relation()` 实际会用 `GRAPH_CONFIG` 把目标节点当知识查找，若误选习题 ID 会报「知识不存在」；说明问题在前端选项来源，而非关系边表结构；
+5. BUG-037 虽然加了 `graphMeta()` / `typeCategoryMeta()` 修复标题，但页面里用于选择节点列表的 `graph` 比较没有被覆盖，仍留有同类键名不一致。
+
+**根因：**
+前端页面直接用连字符路由键与下划线 internal key 做相等比较，导致节点类型选择全部落入默认分支（习题）；缺少统一的键名归一化入口。
+
+**解决方法：**
+
+- `qkMeta.js` 导出 `graphKey()`，把 `question-knowledge-relations` / `knowledge-relations` / `question-relations` 映射为 `question_knowledge` / `knowledge` / `question`；
+- `RelationManagePage.jsx` 先计算 `internalGraph = graphKey(graph)`，再据此选择节点列表与表单标签：
+  - 习题知识关系：起点为习题，终点为知识；
+  - 知识关系：起点与终点均为知识；
+  - 习题关系：起点与终点均为习题；
+- `graphMeta()` 复用 `graphKey()`，保持标题与节点列表使用同一套归一化逻辑；
+- `tests/test_qk.py` 在 `test_ui_hyphenated_routes` 中补充断言：通过页面实际路径创建关系，传习题 ID 作为习题知识关系的目标应返回 400「知识不存在」，传知识 ID 应返回 201，`target_kind` 为 `knowledge`，且列表返回的目标标题对应知识；
+- 重新构建 `dist`。
+
+**时间：** 2026-11-17 18:08–18:16 +08:00
+
+---
+
 ## 附：验证方式
 
 | 缺陷 | 验证 |
@@ -1427,5 +1461,6 @@ pagination={{
 | BUG-035 | 浏览器验证：1440px 下列表与总览点击均打开抽屉，抽屉宽 1188px（1440 − 252）、左边缘 252px，遮罩从 252px 开始且侧边栏仍可点击；关闭后筛选文本与结果保留；编辑/标签跳转正常、删除后列表由 6 行变 5 行；390px 下抽屉与遮罩均为 100vw，`--app-sider-width` 为 0；页面无横向溢出，console error 为 0 |
 | BUG-036 | `test_ui_hyphenated_routes` 通过（8 项子系统测试全绿）；HTTP 冒烟验证 6 条页面实际调用路径均返回 200；`npm run build` 生产构建成功 |
 | BUG-037 | Node 直接导入 `qkMeta.js` 验证 3 个关系页面与 4 个类型页面标题映射正确；`npm run build` 生产构建成功 |
+| BUG-038 | `test_ui_hyphenated_routes` 扩展断言通过：错误目标返回 400「知识不存在」，正确目标返回 201 且 `target_kind=knowledge`、列表目标标题匹配；8 项子系统测试全绿；Node 验证节点列表映射为 `source=questions / target=knowledge`；`npm run build` 生产构建成功 |
 
 上述缺陷修复后，最终回归结果：**70 个后端测试通过（记录 19 + 计划 19 + 文档 16 + 仓库 4 + 工具 4 + 配置 8），数学公式 Node 渲染断言与浏览器验证通过，应用 console error 为 0，生产构建成功；v1.2 计划/记录浏览器断言保持通过**。

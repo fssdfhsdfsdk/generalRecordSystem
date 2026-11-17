@@ -435,6 +435,39 @@ class QuestionKnowledgeApiTestCase(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(data["total"], 1)
 
+        knowledge = self.create_knowledge(title="关系页面应选中的知识")
+        status, error = self.request(
+            "POST",
+            "/api/qk/relations/question-knowledge-relations",
+            {
+                "source_id": question["id"],
+                "target_id": other["id"],
+                "relation_type_id": 1,
+            },
+        )
+        self.assertEqual(status, 400, error)
+        self.assertIn("知识不存在", error["error"]["message"])
+
+        status, mixed = self.request(
+            "POST",
+            "/api/qk/relations/question-knowledge-relations",
+            {
+                "source_id": question["id"],
+                "target_id": knowledge["id"],
+                "relation_type_id": 1,
+            },
+        )
+        self.assertEqual(status, 201, mixed)
+        self.assertEqual(mixed["source_kind"], "question")
+        self.assertEqual(mixed["target_kind"], "knowledge")
+        status, data = self.request(
+            "GET",
+            "/api/qk/relations/question-knowledge-relations?source_id=%d" % question["id"],
+        )
+        self.assertEqual(status, 200, data)
+        self.assertEqual(data["total"], 1)
+        self.assertEqual(data["relations"][0]["target_title"], knowledge["title"])
+
 
 if __name__ == "__main__":
     unittest.main()

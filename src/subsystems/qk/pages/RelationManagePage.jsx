@@ -25,7 +25,7 @@ import {
   SettingOutlined,
 } from '@ant-design/icons'
 import { qkApi } from '../api'
-import { graphMeta } from '../qkMeta'
+import { graphKey, graphMeta } from '../qkMeta'
 import PageHeader from '../../../components/PageHeader'
 
 const EMPTY_TYPE = {
@@ -102,8 +102,9 @@ export default function RelationManagePage({ graph }) {
     }
   }, [graph, filterType, filterQ, reloadToken, message])
 
-  const sourceList = graph === 'knowledge' ? knowledge : questions
-  const targetList = graph === 'question_knowledge' ? knowledge : sourceList
+  const internalGraph = graphKey(graph)
+  const sourceList = internalGraph === 'knowledge' ? knowledge : questions
+  const targetList = internalGraph === 'question_knowledge' ? knowledge : sourceList
   const typeMap = useMemo(
     () => new Map(types.map((item) => [item.id, item])),
     [types],
@@ -549,7 +550,7 @@ export default function RelationManagePage({ graph }) {
         <Form form={edgeForm} layout="vertical" initialValues={EMPTY_EDGE}>
           <Form.Item
             name="source_id"
-            label={graph === 'question_knowledge' ? '习题（起点）' : '起始节点'}
+            label={internalGraph === 'question_knowledge' ? '习题（起点）' : '起始节点'}
             rules={[{ required: true, message: '请选择起始节点' }]}
           >
             <Select
@@ -575,7 +576,7 @@ export default function RelationManagePage({ graph }) {
           </Form.Item>
           <Form.Item
             name="target_id"
-            label={graph === 'question_knowledge' ? '知识（终点）' : '目标节点'}
+            label={internalGraph === 'question_knowledge' ? '知识（终点）' : '目标节点'}
             rules={[{ required: true, message: '请选择目标节点' }]}
           >
             <Select
