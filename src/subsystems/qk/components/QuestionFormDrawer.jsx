@@ -60,16 +60,20 @@ export default function QuestionFormDrawer({ open, question, onClose, onSaved })
               domain_type_id: detail.domain_type_id || undefined,
               tags: detail.tags,
               answers: detail.answers.map((item) => ({
-                id: item.id,
+                answer_id: item.answer_id,
+                title: item.title,
                 content: item.content,
                 thoughts: item.thoughts.map((thought) => ({
-                  id: thought.id,
+                  think_id: thought.think_id,
+                  title: thought.title,
                   content: thought.content,
                 })),
               })),
               ref_answers: detail.ref_answers.map((item) => ({
-                id: item.id,
+                ref_answer_id: item.ref_answer_id,
+                title: item.title,
                 content: item.content,
+                idea: item.idea,
               })),
             })
           })
@@ -100,16 +104,20 @@ export default function QuestionFormDrawer({ open, question, onClose, onSaved })
         domain_type_id: values.domain_type_id || null,
         tags: values.tags || [],
         answers: (values.answers || []).map((item) => ({
-          ...(item.id ? { id: item.id } : {}),
+          ...(item.answer_id ? { answer_id: item.answer_id } : {}),
+          title: item.title || '',
           content: item.content || '',
           thoughts: (item.thoughts || []).map((thought) => ({
-            ...(thought.id ? { id: thought.id } : {}),
+            ...(thought.think_id ? { think_id: thought.think_id } : {}),
+            title: thought.title || '',
             content: thought.content || '',
           })),
         })),
         ref_answers: (values.ref_answers || []).map((item) => ({
-          ...(item.id ? { id: item.id } : {}),
+          ...(item.ref_answer_id ? { ref_answer_id: item.ref_answer_id } : {}),
+          title: item.title || '',
           content: item.content || '',
+          idea: item.idea || '',
         })),
       }
       if (question?.id) {
@@ -193,7 +201,7 @@ export default function QuestionFormDrawer({ open, question, onClose, onSaved })
                     type="dashed"
                     size="small"
                     icon={<PlusOutlined />}
-                    onClick={() => add({ content: '', thoughts: [] })}
+                    onClick={() => add({ title: '', content: '', thoughts: [] })}
                   >
                     添加答案
                   </Button>
@@ -210,7 +218,14 @@ export default function QuestionFormDrawer({ open, question, onClose, onSaved })
                         onClick={() => remove(answer.name)}
                       />
                     </div>
-                    <Form.Item name={[answer.name, 'content']} label="答案内容">
+                    <Form.Item
+                      name={[answer.name, 'title']}
+                      label="答案标题"
+                      rules={[{ required: true, message: '请输入答案标题' }]}
+                    >
+                      <Input maxLength={255} placeholder="例如：面积法证明" />
+                    </Form.Item>
+                    <Form.Item name={[answer.name, 'content']} label="我的答案">
                       <MarkdownEditor minRows={3} placeholder="写下你的答案。" />
                     </Form.Item>
                     <Form.List name={[answer.name, 'thoughts']}>
@@ -222,13 +237,16 @@ export default function QuestionFormDrawer({ open, question, onClose, onSaved })
                               type="link"
                               size="small"
                               icon={<PlusOutlined />}
-                              onClick={() => addThought({ content: '' })}
+                              onClick={() => addThought({ title: '', content: '' })}
                             >
                               添加思考
                             </Button>
                           </div>
                           {thoughts.map((thought) => (
                             <div className="qk-thought-item" key={thought.key}>
+                              <Form.Item name={[thought.name, 'title']} label={`思考 ${thought.name + 1} 标题`}>
+                                <Input maxLength={255} placeholder="例如：先作辅助线" />
+                              </Form.Item>
                               <Form.Item name={[thought.name, 'content']} label={`思考 ${thought.name + 1}`}>
                                 <MarkdownEditor minRows={2} placeholder="这一步是怎么想到的？" />
                               </Form.Item>
@@ -259,7 +277,7 @@ export default function QuestionFormDrawer({ open, question, onClose, onSaved })
                     type="dashed"
                     size="small"
                     icon={<PlusOutlined />}
-                    onClick={() => add({ content: '' })}
+                    onClick={() => add({ title: '', content: '', idea: '' })}
                   >
                     添加参考答案
                   </Button>
@@ -276,8 +294,18 @@ export default function QuestionFormDrawer({ open, question, onClose, onSaved })
                         onClick={() => remove(item.name)}
                       />
                     </div>
-                    <Form.Item name={[item.name, 'content']}>
+                    <Form.Item
+                      name={[item.name, 'title']}
+                      label="参考答案标题"
+                      rules={[{ required: true, message: '请输入参考答案标题' }]}
+                    >
+                      <Input maxLength={255} placeholder="例如：标准答案" />
+                    </Form.Item>
+                    <Form.Item name={[item.name, 'content']} label="参考答案">
                       <MarkdownEditor minRows={3} placeholder="标准解法或参考思路。" />
+                    </Form.Item>
+                    <Form.Item name={[item.name, 'idea']} label="我的想法">
+                      <MarkdownEditor minRows={2} placeholder="对照标准答案后的想法与复盘。" />
                     </Form.Item>
                   </div>
                 ))}

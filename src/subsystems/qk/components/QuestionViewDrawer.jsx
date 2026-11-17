@@ -10,7 +10,9 @@ import {
 } from 'antd'
 import {
   BranchesOutlined,
+  CheckCircleOutlined,
   EditOutlined,
+  FileTextOutlined,
   LinkOutlined,
   ReloadOutlined,
 } from '@ant-design/icons'
@@ -26,6 +28,8 @@ export default function QuestionViewDrawer({
   onClose,
   onEdit,
   onChanged,
+  onOpenAnswers,
+  onOpenRefAnswers,
   onOpenRelations,
   onOpenKnowledgeRelations,
 }) {
@@ -91,6 +95,28 @@ export default function QuestionViewDrawer({
             <button
               type="button"
               className="qk-relation-entry"
+              onClick={() => onOpenAnswers?.(detail)}
+            >
+              <FileTextOutlined />
+              <span>
+                <strong>我的答案查看</strong>
+                <small>{detail.answer_count} 条答案历史</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              className="qk-relation-entry"
+              onClick={() => onOpenRefAnswers?.(detail)}
+            >
+              <CheckCircleOutlined />
+              <span>
+                <strong>参考答案查看</strong>
+                <small>{detail.ref_answer_count} 条参考答案</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              className="qk-relation-entry"
               onClick={() => onOpenRelations?.(detail)}
             >
               <BranchesOutlined />
@@ -137,44 +163,9 @@ export default function QuestionViewDrawer({
             <Markdown value={detail.content} empty="还没有填写题目内容。" />
           </section>
 
-          <section className="catalog-section">
-            <h3>我的答案（{detail.answers.length}）</h3>
-            {detail.answers.length ? (
-              detail.answers.map((answer, index) => (
-                <div className="qk-answer-card" key={answer.id}>
-                  <div className="qk-answer-head">答案 {index + 1}</div>
-                  <Markdown value={answer.content} empty="这份答案还是空的。" />
-                  {answer.thoughts.length ? (
-                    <div className="qk-thought-view">
-                      <div className="qk-answer-subhead">思维链</div>
-                      {answer.thoughts.map((thought, tIndex) => (
-                        <div className="qk-thought-view-item" key={thought.id}>
-                          <span>思考 {tIndex + 1}</span>
-                          <Markdown value={thought.content} empty="未填写。" />
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ))
-            ) : (
-              <p className="muted-text">还没有记录答案。</p>
-            )}
-          </section>
-
-          <section className="catalog-section">
-            <h3>参考答案（{detail.ref_answers.length}）</h3>
-            {detail.ref_answers.length ? (
-              detail.ref_answers.map((item, index) => (
-                <div className="qk-answer-card" key={item.id}>
-                  <div className="qk-answer-head">参考答案 {index + 1}</div>
-                  <Markdown value={item.content} empty="未填写参考答案。" />
-                </div>
-              ))
-            ) : (
-              <p className="muted-text">还没有参考答案。</p>
-            )}
-          </section>
+          <div className="qk-view-hint">
+            我的答案与参考答案仅展示标题列表，点击上方入口可逐条打开详情。
+          </div>
         </div>
       ) : (
         <EmptyStateFallback

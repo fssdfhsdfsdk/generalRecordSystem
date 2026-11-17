@@ -12,6 +12,7 @@ import urllib.request
 from pathlib import Path
 
 import server
+from backend.qk import store as qk_store
 
 
 class QuestionKnowledgeApiTestCase(unittest.TestCase):
@@ -77,11 +78,20 @@ class QuestionKnowledgeApiTestCase(unittest.TestCase):
             "tags": ["数学", "几何"],
             "answers": [
                 {
+                    "title": "面积法",
                     "content": "我的答案",
-                    "thoughts": [{"content": "先画辅助线"}],
+                    "thoughts": [
+                        {"title": "作辅助线", "content": "先画辅助线"}
+                    ],
                 }
             ],
-            "ref_answers": [{"content": "参考答案"}],
+            "ref_answers": [
+                {
+                    "title": "标准答案",
+                    "content": "参考答案",
+                    "idea": "我的想法",
+                }
+            ],
         }
         payload.update(overrides)
         status, data = self.request("POST", "/api/qk/questions", payload)
@@ -149,6 +159,10 @@ class QuestionKnowledgeApiTestCase(unittest.TestCase):
         self.assertEqual(len(question["answers"]), 1)
         self.assertEqual(len(question["answers"][0]["thoughts"]), 1)
         self.assertEqual(question["ref_answers"][0]["content"], "参考答案")
+        self.assertEqual(question["ref_answers"][0]["title"], "标准答案")
+        self.assertEqual(question["ref_answers"][0]["idea"], "我的想法")
+        self.assertEqual(question["answers"][0]["title"], "面积法")
+        self.assertEqual(question["answers"][0]["thoughts"][0]["title"], "作辅助线")
 
         status, detail = self.request("GET", f"/api/qk/questions/{question['id']}")
         self.assertEqual(status, 200)
@@ -167,7 +181,7 @@ class QuestionKnowledgeApiTestCase(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(data["total"], 0)
 
-        answer_id = detail["answers"][0]["id"]
+        answer_id = detail["answers"][0]["answer_id"]
         status, updated = self.request(
             "PUT",
             f"/api/qk/questions/{question['id']}",
@@ -175,7 +189,8 @@ class QuestionKnowledgeApiTestCase(unittest.TestCase):
                 "title": "新的标题",
                 "answers": [
                     {
-                        "id": answer_id,
+                        "answer_id": answer_id,
+                        "title": "面积法（修订）",
                         "content": "修改后的答案",
                         "thoughts": [],
                     }
@@ -183,6 +198,7 @@ class QuestionKnowledgeApiTestCase(unittest.TestCase):
             },
         )
         self.assertEqual(status, 200, updated)
+        self.assertEqual(updated["answers"][0]["title"], "面积法（修订）")
         self.assertEqual(updated["answers"][0]["content"], "修改后的答案")
         self.assertEqual(updated["answers"][0]["thoughts"], [])
         self.assertEqual(updated["ref_answers"][0]["content"], "参考答案")
@@ -191,6 +207,86 @@ class QuestionKnowledgeApiTestCase(unittest.TestCase):
         self.assertEqual(status, 200, data)
         status, data = self.request("GET", f"/api/qk/questions/{question['id']}")
         self.assertEqual(status, 404)
+
+    def test_legacy_answer_tables_are_rebuilt(self):
+        legacy = self.temp_dir / "legacy.db"
+        conn = server.connect(legacy)
+        try:
+            conn.executescript(
+                """
+                CREATE TABLE app_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                INSERT INTO app_meta(key, value) VALUES('schema_version', '1');
+                CREATE TABLE question_answers(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    question_id INTEGER NOT NULL,
+                    content TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                INSERT INTO question_answers(question_id, content, created_at, updated_at)
+                VALUES(1, '旧数据', '2026-01-01 00:00:00', '2026-01-01 00:00:00');
+                """
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        qk_store.init_db(legacy)
+        conn = server.connect(legacy)
+        try:
+            columns = {
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(question_answers)")
+            }
+            self.assertIn("answer_id", columns)
+            self.assertIn("title", columns)
+            self.assertNotIn("id", columns)
+            self.assertEqual(conn.execute("SELECT COUNT(*) AS n FROM question_answers").fetchone()["n"], 0)
+            version = conn.execute(
+                "SELECT value FROM app_meta WHERE key = 'schema_version'"
+            ).fetchone()["value"]
+            self.assertEqual(version, "2")
+        finally:
+            conn.close()
+
+    def test_answer_and_ref_answer_detail_endpoints(self):
+        question = self.create_question()
+        qid = question["id"]
+        answer_id = question["answers"][0]["answer_id"]
+        ref_id = question["ref_answers"][0]["ref_answer_id"]
+
+        status, data = self.request("GET", f"/api/qk/questions/{qid}/answers")
+        self.assertEqual(status, 200, data)
+        self.assertEqual(data["total"], 1)
+        self.assertEqual(data["answers"][0]["title"], "面积法")
+        self.assertNotIn("content", data["answers"][0])
+
+        status, data = self.request(
+            "GET", f"/api/qk/questions/{qid}/answers/{answer_id}"
+        )
+        self.assertEqual(status, 200, data)
+        self.assertEqual(data["answer_id"], answer_id)
+        self.assertEqual(data["title"], "面积法")
+        self.assertEqual(data["thoughts"][0]["think_id"], question["answers"][0]["thoughts"][0]["think_id"])
+        self.assertEqual(data["thoughts"][0]["title"], "作辅助线")
+
+        status, data = self.request("GET", f"/api/qk/questions/{qid}/ref-answers")
+        self.assertEqual(status, 200, data)
+        self.assertEqual(data["total"], 1)
+        self.assertEqual(data["ref_answers"][0]["title"], "标准答案")
+
+        status, data = self.request(
+            "GET", f"/api/qk/questions/{qid}/ref-answers/{ref_id}"
+        )
+        self.assertEqual(status, 200, data)
+        self.assertEqual(data["ref_answer_id"], ref_id)
+        self.assertEqual(data["content"], "参考答案")
+        self.assertEqual(data["idea"], "我的想法")
+
+        status, error = self.request(
+            "GET", f"/api/qk/questions/{qid}/answers/{ref_id + 1000}"
+        )
+        self.assertEqual(status, 404, error)
 
     def test_knowledge_crud_and_difficulty(self):
         knowledge = self.create_knowledge()

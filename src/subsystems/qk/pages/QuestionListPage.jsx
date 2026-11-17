@@ -12,9 +12,11 @@ import {
 } from 'antd'
 import {
   BranchesOutlined,
+  CheckCircleOutlined,
   DeleteOutlined,
   EditOutlined,
   EyeOutlined,
+  FileTextOutlined,
   FilterOutlined,
   LinkOutlined,
   PlusOutlined,
@@ -35,6 +37,10 @@ import QuestionViewDrawer from '../components/QuestionViewDrawer'
 import KnowledgeFormDrawer from '../components/KnowledgeFormDrawer'
 import KnowledgeViewDrawer from '../components/KnowledgeViewDrawer'
 import RelationDrawer from '../components/RelationDrawer'
+import AnswerListDrawer from '../components/AnswerListDrawer'
+import AnswerDetailDrawer from '../components/AnswerDetailDrawer'
+import RefAnswerListDrawer from '../components/RefAnswerListDrawer'
+import RefAnswerDetailDrawer from '../components/RefAnswerDetailDrawer'
 
 const SORT_OPTIONS = [
   { value: 'updated_desc', label: '最近更新' },
@@ -73,6 +79,10 @@ export default function QuestionListPage({ initialTags = [], initialFocus }) {
   const [relation, setRelation] = useState(null)
   const [relatedView, setRelatedView] = useState(null)
   const [relatedEdit, setRelatedEdit] = useState(null)
+  const [answerListFor, setAnswerListFor] = useState(null)
+  const [refListFor, setRefListFor] = useState(null)
+  const [answerDetail, setAnswerDetail] = useState(null)
+  const [refDetail, setRefDetail] = useState(null)
 
   const initialKey = initialTags.join('\u0000')
   useEffect(() => {
@@ -166,6 +176,24 @@ export default function QuestionListPage({ initialTags = [], initialFocus }) {
     setRelation({ graph, nodeId: item.id, nodeKind, title: item.title })
   }
 
+  const openAnswerList = (item) => {
+    setDetailId(null)
+    setAnswerListFor({ id: item.id, title: item.title })
+  }
+
+  const openRefList = (item) => {
+    setDetailId(null)
+    setRefListFor({ id: item.id, title: item.title })
+  }
+
+  const openQuestionDetail = (questionId) => {
+    setAnswerDetail(null)
+    setRefDetail(null)
+    setAnswerListFor(null)
+    setRefListFor(null)
+    setDetailId(questionId)
+  }
+
   const openRelatedItem = (kind, id) => {
     if (kind === 'knowledge') setRelatedView({ kind, id })
     else setRelatedView({ kind: 'question', id })
@@ -210,6 +238,12 @@ export default function QuestionListPage({ initialTags = [], initialFocus }) {
               ))}
             </div>
             <div className="qk-list-links">
+              <button type="button" onClick={() => openAnswerList(record)}>
+                <FileTextOutlined /> 我的答案 {record.answer_count}
+              </button>
+              <button type="button" onClick={() => openRefList(record)}>
+                <CheckCircleOutlined /> 参考答案 {record.ref_answer_count}
+              </button>
               <button
                 type="button"
                 onClick={() => openRelation(record, 'question')}
@@ -454,6 +488,8 @@ export default function QuestionListPage({ initialTags = [], initialFocus }) {
           openForm(detail)
         }}
         onChanged={() => setReloadToken((token) => token + 1)}
+        onOpenAnswers={(item) => openAnswerList(item)}
+        onOpenRefAnswers={(item) => openRefList(item)}
         onOpenRelations={(item) => {
           setDetailId(null)
           openRelation(item, 'question')
@@ -493,6 +529,14 @@ export default function QuestionListPage({ initialTags = [], initialFocus }) {
             setRelatedView(null)
             openForm(item)
           }}
+          onOpenAnswers={(item) => {
+            setRelatedView(null)
+            openAnswerList(item)
+          }}
+          onOpenRefAnswers={(item) => {
+            setRelatedView(null)
+            openRefList(item)
+          }}
         />
       ) : null}
       {relatedView?.kind === 'knowledge' ? (
@@ -522,6 +566,51 @@ export default function QuestionListPage({ initialTags = [], initialFocus }) {
           onSaved={() => setReloadToken((token) => token + 1)}
         />
       ) : null}
+
+      <AnswerListDrawer
+        open={Boolean(answerListFor)}
+        questionId={answerListFor?.id}
+        questionTitle={answerListFor?.title}
+        onClose={() => setAnswerListFor(null)}
+        onOpenAnswer={(answerId) =>
+          setAnswerDetail({
+            questionId: answerListFor.id,
+            answerId,
+            title: answerListFor.title,
+          })
+        }
+        onOpenQuestion={() => openQuestionDetail(answerListFor.id)}
+      />
+      <AnswerDetailDrawer
+        open={Boolean(answerDetail)}
+        questionId={answerDetail?.questionId}
+        answerId={answerDetail?.answerId}
+        questionTitle={answerDetail?.title}
+        onClose={() => setAnswerDetail(null)}
+        onOpenQuestion={() => openQuestionDetail(answerDetail.questionId)}
+      />
+      <RefAnswerListDrawer
+        open={Boolean(refListFor)}
+        questionId={refListFor?.id}
+        questionTitle={refListFor?.title}
+        onClose={() => setRefListFor(null)}
+        onOpenRefAnswer={(refAnswerId) =>
+          setRefDetail({
+            questionId: refListFor.id,
+            refAnswerId,
+            title: refListFor.title,
+          })
+        }
+        onOpenQuestion={() => openQuestionDetail(refListFor.id)}
+      />
+      <RefAnswerDetailDrawer
+        open={Boolean(refDetail)}
+        questionId={refDetail?.questionId}
+        refAnswerId={refDetail?.refAnswerId}
+        questionTitle={refDetail?.title}
+        onClose={() => setRefDetail(null)}
+        onOpenQuestion={() => openQuestionDetail(refDetail.questionId)}
+      />
     </div>
   )
 }

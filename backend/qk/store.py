@@ -207,24 +207,29 @@ CREATE TABLE IF NOT EXISTS knowledge_tag_links (
 );
 
 CREATE TABLE IF NOT EXISTS question_answers (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    answer_id   INTEGER PRIMARY KEY AUTOINCREMENT,
     question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+    title       TEXT NOT NULL DEFAULT '',
     content     TEXT NOT NULL DEFAULT '',
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS answer_thoughts (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    answer_id  INTEGER NOT NULL REFERENCES question_answers(id) ON DELETE CASCADE,
+    think_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    answer_id  INTEGER NOT NULL REFERENCES question_answers(answer_id) ON DELETE CASCADE,
+    title      TEXT NOT NULL DEFAULT '',
     content    TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS question_ref_answers (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
-    content     TEXT NOT NULL DEFAULT '',
-    created_at  TEXT NOT NULL
+    ref_answer_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    question_id   INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+    title         TEXT NOT NULL DEFAULT '',
+    content       TEXT NOT NULL DEFAULT '',
+    idea          TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS knowledge_relation_types (
@@ -295,8 +300,8 @@ CREATE INDEX IF NOT EXISTS idx_questions_updated ON questions(updated_at DESC, i
 CREATE INDEX IF NOT EXISTS idx_knowledge_updated ON knowledge(updated_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_question_tag_links_tag ON question_tag_links(tag_id);
 CREATE INDEX IF NOT EXISTS idx_knowledge_tag_links_tag ON knowledge_tag_links(tag_id);
-CREATE INDEX IF NOT EXISTS idx_question_answers_question ON question_answers(question_id, id);
-CREATE INDEX IF NOT EXISTS idx_answer_thoughts_answer ON answer_thoughts(answer_id, id);
+CREATE INDEX IF NOT EXISTS idx_question_answers_question ON question_answers(question_id, answer_id);
+CREATE INDEX IF NOT EXISTS idx_answer_thoughts_answer ON answer_thoughts(answer_id, think_id);
 CREATE INDEX IF NOT EXISTS idx_qk_question_edges_source ON question_relations(source_id);
 CREATE INDEX IF NOT EXISTS idx_qk_question_edges_target ON question_relations(target_id);
 CREATE INDEX IF NOT EXISTS idx_qk_knowledge_edges_source ON knowledge_relations(source_id);
@@ -311,10 +316,27 @@ def init_db(db_path: Path) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = connect(db_path)
     try:
-        conn.executescript(SCHEMA_SQL)
         conn.execute(
-            "INSERT OR IGNORE INTO app_meta(key, value) VALUES('schema_version', '1')"
+            "CREATE TABLE IF NOT EXISTS app_meta "
+            "(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
         )
+        version = conn.execute(
+            "SELECT value FROM app_meta WHERE key = 'schema_version'"
+        ).fetchone()
+        if version is None or version["value"] != "2":
+            # v2 rebuilds the answer/reference-answer models. No migration is
+            # provided on purpose: these tables are treated as disposable.
+            # Drop before running SCHEMA_SQL so old indexes cannot reference
+            # columns that no longer exist.
+            conn.execute("DROP TABLE IF EXISTS answer_thoughts")
+            conn.execute("DROP TABLE IF EXISTS question_answers")
+            conn.execute("DROP TABLE IF EXISTS question_ref_answers")
+        conn.executescript(SCHEMA_SQL)
+        if version is None or version["value"] != "2":
+            conn.execute(
+                "INSERT OR REPLACE INTO app_meta(key, value) "
+                "VALUES('schema_version', '2')"
+            )
         seeded = conn.execute(
             "SELECT value FROM app_meta WHERE key = 'qk_seed_version'"
         ).fetchone()
@@ -681,7 +703,11 @@ def _validate_answers(raw) -> list[dict]:
                 raise ApiError(400, f"第 {t_index} 条思考格式不正确")
             clean_thoughts.append(
                 {
-                    "id": thought.get("id") or thought.get("think_id"),
+                    "answer_id": item.get("answer_id") or item.get("id"),
+                    "think_id": thought.get("think_id") or thought.get("id"),
+                    "title": clean_text(
+                        thought.get("title"), "思考标题", MAX_TITLE
+                    ),
                     "content": optional_text(
                         thought.get("content", thought.get("text", "")),
                         "我的思考",
@@ -691,7 +717,8 @@ def _validate_answers(raw) -> list[dict]:
             )
         result.append(
             {
-                "id": item.get("id") or item.get("answer_id"),
+                "answer_id": item.get("answer_id") or item.get("id"),
+                "title": clean_text(item.get("title"), "答案标题", MAX_TITLE),
                 "content": optional_text(
                     item.get("content", item.get("answer", "")), "我的答案", MAX_MARKDOWN
                 ),
@@ -710,159 +737,262 @@ def _validate_ref_answers(raw) -> list[dict]:
         raise ApiError(400, "最多保存 100 条参考答案")
     result = []
     for index, item in enumerate(raw, start=1):
-        if isinstance(item, dict):
-            content = item.get("content", item.get("ref_answer", ""))
-        else:
-            content = item
+        if not isinstance(item, dict):
+            raise ApiError(400, f"第 {index} 条参考答案格式不正确")
         result.append(
             {
-                "id": item.get("id") or item.get("ref_answer_id")
-                if isinstance(item, dict)
-                else None,
-                "content": optional_text(content, "参考答案", MAX_MARKDOWN),
+                "ref_answer_id": item.get("ref_answer_id") or item.get("id"),
+                "title": clean_text(item.get("title"), "参考答案标题", MAX_TITLE),
+                "content": optional_text(
+                    item.get("content", item.get("ref_answer", "")),
+                    "参考答案",
+                    MAX_MARKDOWN,
+                ),
+                "idea": optional_text(item.get("idea", ""), "我的想法", MAX_MARKDOWN),
             }
         )
     return result
 
 
+def _thought_payload(row: sqlite3.Row) -> dict:
+    return {
+        "think_id": row["think_id"],
+        "id": row["think_id"],
+        "answer_id": row["answer_id"],
+        "title": row["title"],
+        "content": row["content"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def _answer_payload(row: sqlite3.Row, thoughts: list[dict] | None = None) -> dict:
+    return {
+        "answer_id": row["answer_id"],
+        "id": row["answer_id"],
+        "question_id": row["question_id"],
+        "title": row["title"],
+        "content": row["content"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+        "thoughts": thoughts if thoughts is not None else [],
+    }
+
+
+def _ref_answer_payload(row: sqlite3.Row) -> dict:
+    return {
+        "ref_answer_id": row["ref_answer_id"],
+        "id": row["ref_answer_id"],
+        "question_id": row["question_id"],
+        "title": row["title"],
+        "content": row["content"],
+        "idea": row["idea"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
 def _fetch_answers(conn: sqlite3.Connection, question_id: int) -> list[dict]:
     rows = conn.execute(
-        "SELECT * FROM question_answers WHERE question_id = ? ORDER BY id",
+        "SELECT * FROM question_answers WHERE question_id = ? ORDER BY answer_id",
         (question_id,),
     ).fetchall()
     thought_rows = conn.execute(
         "SELECT th.* FROM answer_thoughts th "
-        "JOIN question_answers a ON a.id = th.answer_id "
-        "WHERE a.question_id = ? ORDER BY th.id",
+        "JOIN question_answers a ON a.answer_id = th.answer_id "
+        "WHERE a.question_id = ? ORDER BY th.think_id",
         (question_id,),
     ).fetchall()
     grouped: dict[int, list[dict]] = {}
     for thought in thought_rows:
-        grouped.setdefault(thought["answer_id"], []).append(
-            {
-                "id": thought["id"],
-                "think_id": thought["id"],
-                "content": thought["content"],
-                "created_at": thought["created_at"],
-                "updated_at": thought["updated_at"],
-            }
-        )
+        grouped.setdefault(thought["answer_id"], []).append(_thought_payload(thought))
     return [
-        {
-            "id": row["id"],
-            "answer_id": row["id"],
-            "content": row["content"],
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
-            "thoughts": grouped.get(row["id"], []),
-        }
-        for row in rows
+        _answer_payload(row, grouped.get(row["answer_id"], [])) for row in rows
     ]
 
 
-def _fetch_ref_answers(conn: sqlite3.Connection, question_id: int) -> list[dict]:
+def list_answers(conn: sqlite3.Connection, question_id: int) -> list[dict]:
     rows = conn.execute(
-        "SELECT * FROM question_ref_answers WHERE question_id = ? ORDER BY id",
+        "SELECT answer_id, question_id, title, created_at, updated_at "
+        "FROM question_answers WHERE question_id = ? ORDER BY answer_id",
         (question_id,),
     ).fetchall()
     return [
         {
-            "id": row["id"],
-            "ref_answer_id": row["id"],
-            "content": row["content"],
+            "answer_id": row["answer_id"],
+            "id": row["answer_id"],
+            "title": row["title"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+        for row in rows
+    ]
+
+
+def fetch_answer(conn: sqlite3.Connection, question_id: int, answer_id: int) -> dict:
+    row = conn.execute(
+        "SELECT * FROM question_answers WHERE question_id = ? AND answer_id = ?",
+        (question_id, answer_id),
+    ).fetchone()
+    if row is None:
+        raise ApiError(404, "我的答案不存在", "not_found")
+    thoughts = conn.execute(
+        "SELECT * FROM answer_thoughts WHERE answer_id = ? ORDER BY think_id",
+        (answer_id,),
+    ).fetchall()
+    return _answer_payload(
+        row, [_thought_payload(thought) for thought in thoughts]
+    )
+
+
+def _fetch_ref_answers(conn: sqlite3.Connection, question_id: int) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM question_ref_answers WHERE question_id = ? ORDER BY ref_answer_id",
+        (question_id,),
+    ).fetchall()
+    return [_ref_answer_payload(row) for row in rows]
+
+
+def list_ref_answers(conn: sqlite3.Connection, question_id: int) -> list[dict]:
+    rows = conn.execute(
+        "SELECT ref_answer_id, question_id, title, created_at "
+        "FROM question_ref_answers WHERE question_id = ? ORDER BY ref_answer_id",
+        (question_id,),
+    ).fetchall()
+    return [
+        {
+            "ref_answer_id": row["ref_answer_id"],
+            "id": row["ref_answer_id"],
+            "title": row["title"],
             "created_at": row["created_at"],
         }
         for row in rows
     ]
+
+
+def fetch_ref_answer(
+    conn: sqlite3.Connection, question_id: int, ref_answer_id: int
+) -> dict:
+    row = conn.execute(
+        "SELECT * FROM question_ref_answers "
+        "WHERE question_id = ? AND ref_answer_id = ?",
+        (question_id, ref_answer_id),
+    ).fetchone()
+    if row is None:
+        raise ApiError(404, "参考答案不存在", "not_found")
+    return _ref_answer_payload(row)
 
 
 def _sync_answers(
     conn: sqlite3.Connection, question_id: int, answers: list[dict]
 ) -> None:
     existing = {
-        row["id"]: row
+        row["answer_id"]: row
         for row in conn.execute(
             "SELECT * FROM question_answers WHERE question_id = ?", (question_id,)
         ).fetchall()
     }
     keep: set[int] = set()
     for answer in answers:
-        raw_id = answer.get("id")
+        raw_id = answer.get("answer_id")
         answer_id = int(raw_id) if raw_id else None
         stamp = now_text()
         if answer_id and answer_id in existing:
             conn.execute(
-                "UPDATE question_answers SET content = ?, updated_at = ? WHERE id = ?",
-                (answer["content"], stamp, answer_id),
+                "UPDATE question_answers SET title = ?, content = ?, updated_at = ? "
+                "WHERE answer_id = ?",
+                (answer["title"], answer["content"], stamp, answer_id),
             )
             keep.add(answer_id)
         else:
             cur = conn.execute(
-                "INSERT INTO question_answers(question_id, content, created_at, updated_at) "
-                "VALUES(?, ?, ?, ?)",
-                (question_id, answer["content"], stamp, stamp),
+                "INSERT INTO question_answers(question_id, title, content, "
+                "created_at, updated_at) VALUES(?, ?, ?, ?, ?)",
+                (question_id, answer["title"], answer["content"], stamp, stamp),
             )
             answer_id = cur.lastrowid
             keep.add(answer_id)
 
         old_thoughts = {
-            row["id"]: row
+            row["think_id"]: row
             for row in conn.execute(
                 "SELECT * FROM answer_thoughts WHERE answer_id = ?", (answer_id,)
             ).fetchall()
         }
         thought_keep: set[int] = set()
         for thought in answer["thoughts"]:
-            thought_id = thought.get("id")
+            thought_id = thought.get("think_id")
             thought_id = int(thought_id) if thought_id else None
             if thought_id and thought_id in old_thoughts:
                 conn.execute(
-                    "UPDATE answer_thoughts SET content = ?, updated_at = ? WHERE id = ?",
-                    (thought["content"], stamp, thought_id),
+                    "UPDATE answer_thoughts SET title = ?, content = ?, updated_at = ? "
+                    "WHERE think_id = ?",
+                    (thought["title"], thought["content"], stamp, thought_id),
                 )
             else:
                 cur = conn.execute(
-                    "INSERT INTO answer_thoughts(answer_id, content, created_at, updated_at) "
-                    "VALUES(?, ?, ?, ?)",
-                    (answer_id, thought["content"], stamp, stamp),
+                    "INSERT INTO answer_thoughts(answer_id, title, content, "
+                    "created_at, updated_at) VALUES(?, ?, ?, ?, ?)",
+                    (answer_id, thought["title"], thought["content"], stamp, stamp),
                 )
                 thought_id = cur.lastrowid
             thought_keep.add(thought_id)
         for thought_id in set(old_thoughts) - thought_keep:
-            conn.execute("DELETE FROM answer_thoughts WHERE id = ?", (thought_id,))
+            conn.execute(
+                "DELETE FROM answer_thoughts WHERE think_id = ?", (thought_id,)
+            )
 
     for answer_id in set(existing) - keep:
-        conn.execute("DELETE FROM question_answers WHERE id = ?", (answer_id,))
+        conn.execute("DELETE FROM question_answers WHERE answer_id = ?", (answer_id,))
 
 
 def _sync_ref_answers(
     conn: sqlite3.Connection, question_id: int, ref_answers: list[dict]
 ) -> None:
     existing = {
-        row["id"]
+        row["ref_answer_id"]
         for row in conn.execute(
-            "SELECT id FROM question_ref_answers WHERE question_id = ?", (question_id,)
+            "SELECT ref_answer_id FROM question_ref_answers WHERE question_id = ?",
+            (question_id,),
         ).fetchall()
     }
     keep: set[int] = set()
     for item in ref_answers:
-        raw_id = item.get("id")
-        answer_id = int(raw_id) if raw_id else None
-        if answer_id and answer_id in existing:
+        raw_id = item.get("ref_answer_id")
+        ref_answer_id = int(raw_id) if raw_id else None
+        stamp = now_text()
+        if ref_answer_id and ref_answer_id in existing:
             conn.execute(
-                "UPDATE question_ref_answers SET content = ? WHERE id = ?",
-                (item["content"], answer_id),
+                "UPDATE question_ref_answers SET title = ?, content = ?, idea = ?, "
+                "updated_at = ? WHERE ref_answer_id = ?",
+                (
+                    item["title"],
+                    item["content"],
+                    item["idea"],
+                    stamp,
+                    ref_answer_id,
+                ),
             )
         else:
             cur = conn.execute(
-                "INSERT INTO question_ref_answers(question_id, content, created_at) "
-                "VALUES(?, ?, ?)",
-                (question_id, item["content"], now_text()),
+                "INSERT INTO question_ref_answers(question_id, title, content, idea, "
+                "created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?)",
+                (
+                    question_id,
+                    item["title"],
+                    item["content"],
+                    item["idea"],
+                    stamp,
+                    stamp,
+                ),
             )
-            answer_id = cur.lastrowid
-        keep.add(answer_id)
-    for answer_id in existing - keep:
-        conn.execute("DELETE FROM question_ref_answers WHERE id = ?", (answer_id,))
+            ref_answer_id = cur.lastrowid
+        keep.add(ref_answer_id)
+    for ref_answer_id in existing - keep:
+        conn.execute(
+            "DELETE FROM question_ref_answers WHERE ref_answer_id = ?",
+            (ref_answer_id,),
+        )
 
 
 def _question_payload(row: sqlite3.Row, tags: list[str]) -> dict:

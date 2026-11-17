@@ -41,6 +41,13 @@ export const qkApi = {
   questionRelations: (id) => request(`/api/qk/questions/${id}/relations`),
   questionKnowledgeRelations: (id) =>
     request(`/api/qk/questions/${id}/knowledge-relations`),
+  listAnswers: (questionId) => request(`/api/qk/questions/${questionId}/answers`),
+  getAnswer: (questionId, answerId) =>
+    request(`/api/qk/questions/${questionId}/answers/${answerId}`),
+  listRefAnswers: (questionId) =>
+    request(`/api/qk/questions/${questionId}/ref-answers`),
+  getRefAnswer: (questionId, refAnswerId) =>
+    request(`/api/qk/questions/${questionId}/ref-answers/${refAnswerId}`),
 
   listKnowledge: (params = {}) => request(`/api/qk/knowledge${queryString(params)}`),
   getKnowledge: (id) => request(`/api/qk/knowledge/${id}`),

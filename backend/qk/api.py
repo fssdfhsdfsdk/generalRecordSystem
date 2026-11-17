@@ -78,6 +78,18 @@ def dispatch(
                         conn, "question_knowledge", item_id, "question"
                     )
                 }, 200
+            if segments[2] == "answers" and method == "GET":
+                items = store.list_answers(conn, item_id)
+                return {"answers": items, "total": len(items)}, 200
+            if segments[2] == "ref-answers" and method == "GET":
+                items = store.list_ref_answers(conn, item_id)
+                return {"ref_answers": items, "total": len(items)}, 200
+        if len(segments) == 4 and segments[1].isdigit() and segments[3].isdigit():
+            item_id, child_id = int(segments[1]), int(segments[3])
+            if segments[2] == "answers" and method == "GET":
+                return store.fetch_answer(conn, item_id, child_id), 200
+            if segments[2] == "ref-answers" and method == "GET":
+                return store.fetch_ref_answer(conn, item_id, child_id), 200
         raise ApiError(404, "接口不存在", "not_found")
 
     if segments[0] == "knowledge":

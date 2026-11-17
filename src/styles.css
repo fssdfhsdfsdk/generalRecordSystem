@@ -7923,6 +7923,62 @@ button.tag-pill {
   gap: 8px;
 }
 
+.qk-answer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.qk-answer-list-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.qk-answer-list-row:hover {
+  border-color: var(--primary);
+  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.08);
+}
+
+.qk-answer-list-title {
+  font-weight: 600;
+}
+
+.qk-answer-list-row small {
+  color: var(--muted);
+}
+
+.qk-detail-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+}
+
+.qk-view-hint {
+  margin-top: 16px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+}
+
 @media (max-width: 992px) {
   .qk-recent-grid,
   .qk-form-two-col,
