@@ -1,5 +1,19 @@
 import { request } from '../../api'
 
+const CATEGORY_KEYS = {
+  'question-node-types': 'question_node',
+  'question-domain-types': 'question_domain',
+  'knowledge-node-types': 'knowledge_node',
+  'knowledge-domain-types': 'knowledge_domain',
+}
+const GRAPH_KEYS = {
+  'question-relations': 'question',
+  'knowledge-relations': 'knowledge',
+  'question-knowledge-relations': 'question_knowledge',
+}
+const categoryKey = (value) => CATEGORY_KEYS[value] || value
+const graphKey = (value) => GRAPH_KEYS[value] || value
+
 function queryString(params = {}) {
   const search = new URLSearchParams()
   Object.entries(params).forEach(([key, value]) => {
@@ -47,28 +61,28 @@ export const qkApi = {
   removeTag: (id) => request(`/api/qk/tags/${id}`, { method: 'DELETE' }),
   cleanupTags: () => request('/api/qk/tags/orphans', { method: 'DELETE' }),
 
-  listTypes: (category) => request(`/api/qk/types/${category}`),
+  listTypes: (category) => request(`/api/qk/types/${categoryKey(category)}`),
   createType: (category, payload) =>
-    request(`/api/qk/types/${category}`, { method: 'POST', body: payload }),
+    request(`/api/qk/types/${categoryKey(category)}`, { method: 'POST', body: payload }),
   updateType: (category, id, payload) =>
-    request(`/api/qk/types/${category}/${id}`, { method: 'PUT', body: payload }),
+    request(`/api/qk/types/${categoryKey(category)}/${id}`, { method: 'PUT', body: payload }),
   removeType: (category, id) =>
-    request(`/api/qk/types/${category}/${id}`, { method: 'DELETE' }),
+    request(`/api/qk/types/${categoryKey(category)}/${id}`, { method: 'DELETE' }),
 
-  listRelationTypes: (graph) => request(`/api/qk/relation-types/${graph}`),
+  listRelationTypes: (graph) => request(`/api/qk/relation-types/${graphKey(graph)}`),
   createRelationType: (graph, payload) =>
-    request(`/api/qk/relation-types/${graph}`, { method: 'POST', body: payload }),
+    request(`/api/qk/relation-types/${graphKey(graph)}`, { method: 'POST', body: payload }),
   updateRelationType: (graph, id, payload) =>
-    request(`/api/qk/relation-types/${graph}/${id}`, { method: 'PUT', body: payload }),
+    request(`/api/qk/relation-types/${graphKey(graph)}/${id}`, { method: 'PUT', body: payload }),
   removeRelationType: (graph, id) =>
-    request(`/api/qk/relation-types/${graph}/${id}`, { method: 'DELETE' }),
+    request(`/api/qk/relation-types/${graphKey(graph)}/${id}`, { method: 'DELETE' }),
 
   listRelations: (graph, params = {}) =>
-    request(`/api/qk/relations/${graph}${queryString(params)}`),
+    request(`/api/qk/relations/${graphKey(graph)}${queryString(params)}`),
   createRelation: (graph, payload) =>
-    request(`/api/qk/relations/${graph}`, { method: 'POST', body: payload }),
+    request(`/api/qk/relations/${graphKey(graph)}`, { method: 'POST', body: payload }),
   updateRelation: (graph, id, payload) =>
-    request(`/api/qk/relations/${graph}/${id}`, { method: 'PUT', body: payload }),
+    request(`/api/qk/relations/${graphKey(graph)}/${id}`, { method: 'PUT', body: payload }),
   removeRelation: (graph, id) =>
-    request(`/api/qk/relations/${graph}/${id}`, { method: 'DELETE' }),
+    request(`/api/qk/relations/${graphKey(graph)}/${id}`, { method: 'DELETE' }),
 }

@@ -11,6 +11,20 @@ import sqlite3
 from ..common import ApiError
 from . import store
 
+# The UI routes use hyphenated page keys; the store uses underscored internal
+# keys. Accept both so deep links and API clients work interchangeably.
+CATEGORY_ALIASES = {
+    "question-node-types": "question_node",
+    "question-domain-types": "question_domain",
+    "knowledge-node-types": "knowledge_node",
+    "knowledge-domain-types": "knowledge_domain",
+}
+GRAPH_ALIASES = {
+    "question-relations": "question",
+    "knowledge-relations": "knowledge",
+    "question-knowledge-relations": "question_knowledge",
+}
+
 
 def _payload(method: str, payload: dict | None) -> dict:
     if method not in ("POST", "PUT"):
@@ -113,7 +127,7 @@ def dispatch(
         raise ApiError(404, "接口不存在", "not_found")
 
     if segments[0] == "types" and len(segments) >= 2:
-        category = segments[1]
+        category = CATEGORY_ALIASES.get(segments[1], segments[1])
         if len(segments) == 2:
             if method == "GET":
                 items = store.list_types(conn, category)
@@ -133,7 +147,7 @@ def dispatch(
         raise ApiError(404, "接口不存在", "not_found")
 
     if segments[0] == "relation-types" and len(segments) >= 2:
-        graph = segments[1]
+        graph = GRAPH_ALIASES.get(segments[1], segments[1])
         if len(segments) == 2:
             if method == "GET":
                 items = store.list_relation_types(conn, graph)
@@ -158,7 +172,7 @@ def dispatch(
         raise ApiError(404, "接口不存在", "not_found")
 
     if segments[0] == "relations" and len(segments) >= 2:
-        graph = segments[1]
+        graph = GRAPH_ALIASES.get(segments[1], segments[1])
         if len(segments) == 2:
             if method == "GET":
                 items = store.list_relation_edges(conn, graph, query)

@@ -381,5 +381,60 @@ class QuestionKnowledgeApiTestCase(unittest.TestCase):
         self.assertIn("question_and_knowledge.db", health["databases"])
 
 
+    def test_ui_hyphenated_routes(self):
+        for route in (
+            "question-node-types",
+            "question-domain-types",
+            "knowledge-node-types",
+            "knowledge-domain-types",
+        ):
+            status, data = self.request("GET", f"/api/qk/types/{route}")
+            self.assertEqual(status, 200, data)
+            self.assertGreater(data["total"], 0)
+
+        status, created = self.request(
+            "POST",
+            "/api/qk/types/knowledge-node-types",
+            {"name": "页面新建类型"},
+        )
+        self.assertEqual(status, 201, created)
+
+        for route in (
+            "question-relations",
+            "knowledge-relations",
+            "question-knowledge-relations",
+        ):
+            status, data = self.request("GET", f"/api/qk/relation-types/{route}")
+            self.assertEqual(status, 200, data)
+            self.assertEqual(data["total"], 5)
+            status, data = self.request("GET", f"/api/qk/relations/{route}")
+            self.assertEqual(status, 200, data)
+
+        status, relation_type = self.request(
+            "POST",
+            "/api/qk/relation-types/question-relations",
+            {"name": "页面新建关系", "is_directed": True},
+        )
+        self.assertEqual(status, 201, relation_type)
+
+        question = self.create_question()
+        other = self.create_question(title="另一道")
+        status, edge = self.request(
+            "POST",
+            "/api/qk/relations/question-relations",
+            {
+                "source_id": question["id"],
+                "target_id": other["id"],
+                "relation_type_id": relation_type["id"],
+            },
+        )
+        self.assertEqual(status, 201, edge)
+        status, data = self.request(
+            "GET", f"/api/qk/relations/question-relations?relation_type_id={relation_type['id']}"
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(data["total"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

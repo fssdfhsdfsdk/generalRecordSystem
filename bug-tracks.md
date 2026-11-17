@@ -1328,6 +1328,36 @@ pagination={{
 
 ---
 
+## BUG-036：习题与知识管理的关系/类型管理页报“关系图不存在”“类型分类不存在”，且无法创建
+
+**描述：**
+新子系统的侧边栏点击「习题关系管理」「知识关系管理」「习题知识关系管理」时页面报错：`关系图不存在`；点击四类节点/领域类型管理时报错：`类型分类不存在`。关系类型、关系边、节点类型与领域类型均无法创建。
+
+**背景与上下文：**
+需求要求新增习题与知识管理子系统，侧边栏包含习题管理、知识管理、标签管理三个分区，并提供三类关系管理（关系类型定义 + 关系边）与四类类型管理。页面路由按前端习惯使用连字符键，例如 `/qk/question-relations`、`/qk/question-node-types`；后端数据层 internal key 则使用下划线键，例如 `question`、`question_knowledge`、`question_node`、`knowledge_domain`。
+
+**分析过程：**
+
+1. 前端 `RelationManagePage` 将 `graph` 设为 `question-relations` / `knowledge-relations` / `question-knowledge-relations`，`TypeManagePage` 将 `category` 设为 `question-node-types` 等；
+2. `qkApi.listRelationTypes/listRelations/listTypes` 与创建接口把这些值原样拼进 `/api/qk/relation-types/{graph}`、`/api/qk/relations/{graph}`、`/api/qk/types/{category}`；
+3. `backend/qk/api.py` 的 dispatcher 直接把 URL 段传给 `store._graph()` / `store._type_table()`；这两个函数只认识下划线 internal key，于是抛出 404；
+4. 列表加载失败的同时，新增弹窗提交也走同一条 URL，因此表现为“无法创建”；
+5. 后端测试此前全部使用下划线键直接请求 API，没有覆盖页面实际使用的连字符路由，所以未提前发现。
+
+**根因：**
+前端路由键与后端 internal key 命名风格不一致，API 层缺少统一的键名映射；测试只覆盖了 internal key，遗漏了 UI 实际调用路径。
+
+**解决方法：**
+
+- `backend/qk/api.py` 新增 `CATEGORY_ALIASES` / `GRAPH_ALIASES`，在 dispatcher 中把连字符路径键映射为下划线 internal key，并保持对原有下划线写法的兼容；
+- `src/subsystems/qk/api.js` 新增同名映射，前端请求发出前即统一为 internal key，避免两侧再次漂移；
+- `tests/test_qk.py` 新增 `test_ui_hyphenated_routes`，覆盖四类类型管理、三类关系类型、三类关系边的读取，以及页面实际路径下的类型、关系类型与关系边创建；
+- 重新构建 `dist`，验证页面实际调用的 6 条 API 路径均返回 200。
+
+**时间：** 2026-11-17 17:54–18:00 +08:00
+
+---
+
 ## 附：验证方式
 
 | 缺陷 | 验证 |
@@ -1367,5 +1397,6 @@ pagination={{
 | BUG-033 | 后端五个测试文件补充 `tag_q` 断言；浏览器验证五个列表页内联模糊标签输入（`py 发` 均只返回同时命中两条标签的记录）、五个模糊标签页面（`/tag-search/py` 等均返回 2 条）、记录页输入新关键词后 URL 与结果同步；console error 为 0；生产构建成功 |
 | BUG-034 | Node 渲染断言 + 浏览器验证：`$...$`、`$$...$$`、`\(...\)`、`\[...\]` 四种写法均生成 KaTeX 节点（2 个行内 + 2 个块级）；围栏代码块、行内代码与 `\\(` 转义保持原文；浏览器只请求 woff2 字体；console error 为 0；生产构建 3,387 modules 成功，`dist` 字体仅 19 个 woff2 + 1 个内联 woff2（约 250 KB） |
 | BUG-035 | 浏览器验证：1440px 下列表与总览点击均打开抽屉，抽屉宽 1188px（1440 − 252）、左边缘 252px，遮罩从 252px 开始且侧边栏仍可点击；关闭后筛选文本与结果保留；编辑/标签跳转正常、删除后列表由 6 行变 5 行；390px 下抽屉与遮罩均为 100vw，`--app-sider-width` 为 0；页面无横向溢出，console error 为 0 |
+| BUG-036 | `test_ui_hyphenated_routes` 通过（8 项子系统测试全绿）；HTTP 冒烟验证 6 条页面实际调用路径均返回 200；`npm run build` 生产构建成功 |
 
 上述缺陷修复后，最终回归结果：**70 个后端测试通过（记录 19 + 计划 19 + 文档 16 + 仓库 4 + 工具 4 + 配置 8），数学公式 Node 渲染断言与浏览器验证通过，应用 console error 为 0，生产构建成功；v1.2 计划/记录浏览器断言保持通过**。
