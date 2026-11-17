@@ -8,11 +8,14 @@ import {
   Select,
   Space,
   Spin,
+  Tooltip,
 } from 'antd'
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { qkApi } from '../api'
 import FuzzyTagSelect from '../../../components/FuzzyTagSelect'
 import MarkdownEditor from '../../../components/MarkdownEditor'
+import AnswerEditDrawer from './AnswerEditDrawer'
+import RefAnswerEditDrawer from './RefAnswerEditDrawer'
 
 const EMPTY = {
   title: '',
@@ -35,11 +38,15 @@ export default function QuestionFormDrawer({ open, question, onClose, onSaved })
   const [tagOptions, setTagOptions] = useState([])
   const [nodeTypes, setNodeTypes] = useState([])
   const [domainTypes, setDomainTypes] = useState([])
+  const [editingAnswer, setEditingAnswer] = useState(null)
+  const [editingRefAnswer, setEditingRefAnswer] = useState(null)
 
   useEffect(() => {
     if (!open) return undefined
     let alive = true
     setLoading(true)
+    setEditingAnswer(null)
+    setEditingRefAnswer(null)
     Promise.all([
       qkApi.listTags({ sort: 'name' }),
       qkApi.listTypes('question_node'),
@@ -206,7 +213,45 @@ export default function QuestionFormDrawer({ open, question, onClose, onSaved })
                     添加答案
                   </Button>
                 </div>
-                {answers.map((answer) => (
+                {answers.map((answer) => {
+                  const current = form.getFieldValue(['answers', answer.name])
+                  if (current?.answer_id) {
+                    return (
+                      <div className="qk-dynamic-row" key={answer.key}>
+                        <button
+                          type="button"
+                          className="qk-dynamic-row-title"
+                          onClick={() =>
+                            setEditingAnswer({ index: answer.name, value: current })
+                          }
+                        >
+                          {current.title || `答案 ${answer.name + 1}`}
+                        </button>
+                        <Space size={2}>
+                          <Tooltip title="编辑答案">
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<EditOutlined />}
+                              onClick={() =>
+                                setEditingAnswer({ index: answer.name, value: current })
+                              }
+                            />
+                          </Tooltip>
+                          <Tooltip title="删除答案">
+                            <Button
+                              type="text"
+                              size="small"
+                              danger
+                              icon={<DeleteOutlined />}
+                              onClick={() => remove(answer.name)}
+                            />
+                          </Tooltip>
+                        </Space>
+                      </div>
+                    )
+                  }
+                  return (
                   <div className="qk-dynamic-card" key={answer.key}>
                     <div className="qk-dynamic-card-head">
                       <span>答案 {answer.name + 1}</span>
@@ -263,7 +308,8 @@ export default function QuestionFormDrawer({ open, question, onClose, onSaved })
                       )}
                     </Form.List>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </Form.List>
@@ -282,7 +328,45 @@ export default function QuestionFormDrawer({ open, question, onClose, onSaved })
                     添加参考答案
                   </Button>
                 </div>
-                {refs.map((item) => (
+                {refs.map((item) => {
+                  const current = form.getFieldValue(['ref_answers', item.name])
+                  if (current?.ref_answer_id) {
+                    return (
+                      <div className="qk-dynamic-row" key={item.key}>
+                        <button
+                          type="button"
+                          className="qk-dynamic-row-title"
+                          onClick={() =>
+                            setEditingRefAnswer({ index: item.name, value: current })
+                          }
+                        >
+                          {current.title || `参考答案 ${item.name + 1}`}
+                        </button>
+                        <Space size={2}>
+                          <Tooltip title="编辑参考答案">
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<EditOutlined />}
+                              onClick={() =>
+                                setEditingRefAnswer({ index: item.name, value: current })
+                              }
+                            />
+                          </Tooltip>
+                          <Tooltip title="删除参考答案">
+                            <Button
+                              type="text"
+                              size="small"
+                              danger
+                              icon={<DeleteOutlined />}
+                              onClick={() => remove(item.name)}
+                            />
+                          </Tooltip>
+                        </Space>
+                      </div>
+                    )
+                  }
+                  return (
                   <div className="qk-dynamic-card" key={item.key}>
                     <div className="qk-dynamic-card-head">
                       <span>参考答案 {item.name + 1}</span>
@@ -308,12 +392,32 @@ export default function QuestionFormDrawer({ open, question, onClose, onSaved })
                       <MarkdownEditor minRows={2} placeholder="对照标准答案后的想法与复盘。" />
                     </Form.Item>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </Form.List>
         </Form>
       )}
+
+      <AnswerEditDrawer
+        open={Boolean(editingAnswer)}
+        value={editingAnswer?.value}
+        onClose={() => setEditingAnswer(null)}
+        onSave={(value) => {
+          form.setFieldValue(['answers', editingAnswer.index], value)
+          setEditingAnswer(null)
+        }}
+      />
+      <RefAnswerEditDrawer
+        open={Boolean(editingRefAnswer)}
+        value={editingRefAnswer?.value}
+        onClose={() => setEditingRefAnswer(null)}
+        onSave={(value) => {
+          form.setFieldValue(['ref_answers', editingRefAnswer.index], value)
+          setEditingRefAnswer(null)
+        }}
+      />
     </Drawer>
   )
 }

@@ -7979,6 +7979,36 @@ button.tag-pill {
   font-size: 12px;
 }
 
+.qk-dynamic-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+}
+
+.qk-dynamic-row-title {
+  flex: 1;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.qk-dynamic-row-title:hover {
+  color: var(--primary);
+}
+
 @media (max-width: 992px) {
   .qk-recent-grid,
   .qk-form-two-col,
