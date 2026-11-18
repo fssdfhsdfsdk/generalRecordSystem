@@ -193,6 +193,8 @@ def dispatch(
                 return store.create_relation(conn, graph, _payload(method, payload)), 201
         if len(segments) == 3 and segments[2].isdigit():
             edge_id = int(segments[2])
+            if method == "GET":
+                return store.fetch_relation(conn, graph, edge_id), 200
             if method == "PUT":
                 return (
                     store.update_relation(conn, graph, edge_id, _payload(method, payload)),

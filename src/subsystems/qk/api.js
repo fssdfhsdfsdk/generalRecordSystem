@@ -86,6 +86,7 @@ export const qkApi = {
 
   listRelations: (graph, params = {}) =>
     request(`/api/qk/relations/${graphKey(graph)}${queryString(params)}`),
+  getRelation: (graph, id) => request(`/api/qk/relations/${graphKey(graph)}/${id}`),
   createRelation: (graph, payload) =>
     request(`/api/qk/relations/${graphKey(graph)}`, { method: 'POST', body: payload }),
   updateRelation: (graph, id, payload) =>

@@ -498,6 +498,16 @@ export default function KnowledgeListPage({ initialTags = [], initialFocus }) {
             setRelatedView(null)
             setRelatedEdit({ kind: 'question', id: item.id })
           }}
+          onOpenRelatedItem={(kind, id) =>
+            setRelatedView({
+              kind: kind === 'question' ? 'question' : 'knowledge',
+              id,
+            })
+          }
+          onManageRelations={() => navigate('/qk/question-relations')}
+          onManageKnowledgeRelations={() =>
+            navigate('/qk/question-knowledge-relations')
+          }
         />
       ) : null}
       {relatedView?.kind === 'knowledge' ? (

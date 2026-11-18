@@ -8009,6 +8009,127 @@ button.tag-pill {
   color: var(--primary);
 }
 
+.qk-unsaved-label {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: #fff7ed;
+  color: #d97706;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.qk-empty-inline {
+  padding: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.qk-detail-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.qk-paged-section {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.qk-paged-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.qk-paged-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.qk-paged-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.qk-paged-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 6px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.qk-paged-row:last-child {
+  border-bottom: 0;
+}
+
+.qk-paged-row:hover .qk-paged-row-title {
+  color: var(--primary);
+}
+
+.qk-paged-row-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.qk-paged-row-subtitle {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.qk-paged-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 10px;
+}
+
+.qk-relation-detail-pair {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.qk-relation-detail-pair > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.qk-relation-detail-pair strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qk-detail-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
 @media (max-width: 992px) {
   .qk-recent-grid,
   .qk-form-two-col,

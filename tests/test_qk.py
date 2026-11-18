@@ -208,6 +208,78 @@ class QuestionKnowledgeApiTestCase(unittest.TestCase):
         status, data = self.request("GET", f"/api/qk/questions/{question['id']}")
         self.assertEqual(status, 404)
 
+    def test_unchanged_answers_keep_updated_at(self):
+        question = self.create_question()
+        old_stamp = "2020-01-01 00:00:00"
+        conn = server.connect(self.qk_db_path)
+        try:
+            with conn:
+                conn.execute(
+                    "UPDATE question_answers SET updated_at = ? WHERE question_id = ?",
+                    (old_stamp, question["id"]),
+                )
+                conn.execute(
+                    "UPDATE answer_thoughts SET updated_at = ? WHERE answer_id = ?",
+                    (old_stamp, question["answers"][0]["answer_id"]),
+                )
+                conn.execute(
+                    "UPDATE question_ref_answers SET updated_at = ? WHERE question_id = ?",
+                    (old_stamp, question["id"]),
+                )
+        finally:
+            conn.close()
+
+        old_answer = question["answers"][0]
+        old_ref = question["ref_answers"][0]
+        status, data = self.request(
+            "PUT",
+            f"/api/qk/questions/{question['id']}",
+            {
+                "answers": [
+                    {
+                        "answer_id": old_answer["answer_id"],
+                        "title": old_answer["title"],
+                        "content": old_answer["content"],
+                        "thoughts": [
+                            {
+                                "think_id": old_answer["thoughts"][0]["think_id"],
+                                "title": old_answer["thoughts"][0]["title"],
+                                "content": old_answer["thoughts"][0]["content"],
+                            }
+                        ],
+                    },
+                    {
+                        "title": "新增答案",
+                        "content": "新内容",
+                        "thoughts": [],
+                    },
+                ],
+                "ref_answers": [
+                    {
+                        "ref_answer_id": old_ref["ref_answer_id"],
+                        "title": old_ref["title"],
+                        "content": old_ref["content"],
+                        "idea": old_ref["idea"],
+                    },
+                    {"title": "新增参考", "content": "新参考", "idea": "新想法"},
+                ],
+            },
+        )
+        self.assertEqual(status, 200, data)
+        answers = {item["answer_id"]: item for item in data["answers"]}
+        refs = {item["ref_answer_id"]: item for item in data["ref_answers"]}
+        self.assertEqual(answers[old_answer["answer_id"]]["updated_at"], old_stamp)
+        self.assertEqual(
+            answers[old_answer["answer_id"]]["thoughts"][0]["updated_at"], old_stamp
+        )
+        self.assertEqual(refs[old_ref["ref_answer_id"]]["updated_at"], old_stamp)
+        for item in data["answers"]:
+            if item["answer_id"] != old_answer["answer_id"]:
+                self.assertNotEqual(item["updated_at"], old_stamp)
+        for item in data["ref_answers"]:
+            if item["ref_answer_id"] != old_ref["ref_answer_id"]:
+                self.assertNotEqual(item["updated_at"], old_stamp)
+
     def test_legacy_answer_tables_are_rebuilt(self):
         legacy = self.temp_dir / "legacy.db"
         conn = server.connect(legacy)
@@ -453,6 +525,14 @@ class QuestionKnowledgeApiTestCase(unittest.TestCase):
             },
         )
         self.assertEqual(status, 201, edge)
+
+        status, relation = self.request(
+            "GET", f"/api/qk/relations/question_knowledge/{edge['id']}"
+        )
+        self.assertEqual(status, 200, relation)
+        self.assertEqual(relation["source_kind"], "question")
+        self.assertEqual(relation["target_kind"], "knowledge")
+        self.assertEqual(relation["relation_code"], "PREREQUISITE")
 
         status, groups = self.request(
             "GET", f"/api/qk/questions/{question['id']}/knowledge-relations"

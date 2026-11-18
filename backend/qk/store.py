@@ -898,11 +898,13 @@ def _sync_answers(
         answer_id = int(raw_id) if raw_id else None
         stamp = now_text()
         if answer_id and answer_id in existing:
-            conn.execute(
-                "UPDATE question_answers SET title = ?, content = ?, updated_at = ? "
-                "WHERE answer_id = ?",
-                (answer["title"], answer["content"], stamp, answer_id),
-            )
+            old = existing[answer_id]
+            if old["title"] != answer["title"] or old["content"] != answer["content"]:
+                conn.execute(
+                    "UPDATE question_answers SET title = ?, content = ?, updated_at = ? "
+                    "WHERE answer_id = ?",
+                    (answer["title"], answer["content"], stamp, answer_id),
+                )
             keep.add(answer_id)
         else:
             cur = conn.execute(
@@ -924,11 +926,16 @@ def _sync_answers(
             thought_id = thought.get("think_id")
             thought_id = int(thought_id) if thought_id else None
             if thought_id and thought_id in old_thoughts:
-                conn.execute(
-                    "UPDATE answer_thoughts SET title = ?, content = ?, updated_at = ? "
-                    "WHERE think_id = ?",
-                    (thought["title"], thought["content"], stamp, thought_id),
-                )
+                old_thought = old_thoughts[thought_id]
+                if (
+                    old_thought["title"] != thought["title"]
+                    or old_thought["content"] != thought["content"]
+                ):
+                    conn.execute(
+                        "UPDATE answer_thoughts SET title = ?, content = ?, "
+                        "updated_at = ? WHERE think_id = ?",
+                        (thought["title"], thought["content"], stamp, thought_id),
+                    )
             else:
                 cur = conn.execute(
                     "INSERT INTO answer_thoughts(answer_id, title, content, "
@@ -950,9 +957,9 @@ def _sync_ref_answers(
     conn: sqlite3.Connection, question_id: int, ref_answers: list[dict]
 ) -> None:
     existing = {
-        row["ref_answer_id"]
+        row["ref_answer_id"]: row
         for row in conn.execute(
-            "SELECT ref_answer_id FROM question_ref_answers WHERE question_id = ?",
+            "SELECT * FROM question_ref_answers WHERE question_id = ?",
             (question_id,),
         ).fetchall()
     }
@@ -962,17 +969,23 @@ def _sync_ref_answers(
         ref_answer_id = int(raw_id) if raw_id else None
         stamp = now_text()
         if ref_answer_id and ref_answer_id in existing:
-            conn.execute(
-                "UPDATE question_ref_answers SET title = ?, content = ?, idea = ?, "
-                "updated_at = ? WHERE ref_answer_id = ?",
-                (
-                    item["title"],
-                    item["content"],
-                    item["idea"],
-                    stamp,
-                    ref_answer_id,
-                ),
-            )
+            old = existing[ref_answer_id]
+            if (
+                old["title"] != item["title"]
+                or old["content"] != item["content"]
+                or old["idea"] != item["idea"]
+            ):
+                conn.execute(
+                    "UPDATE question_ref_answers SET title = ?, content = ?, idea = ?, "
+                    "updated_at = ? WHERE ref_answer_id = ?",
+                    (
+                        item["title"],
+                        item["content"],
+                        item["idea"],
+                        stamp,
+                        ref_answer_id,
+                    ),
+                )
         else:
             cur = conn.execute(
                 "INSERT INTO question_ref_answers(question_id, title, content, idea, "
@@ -988,7 +1001,7 @@ def _sync_ref_answers(
             )
             ref_answer_id = cur.lastrowid
         keep.add(ref_answer_id)
-    for ref_answer_id in existing - keep:
+    for ref_answer_id in set(existing) - keep:
         conn.execute(
             "DELETE FROM question_ref_answers WHERE ref_answer_id = ?",
             (ref_answer_id,),
@@ -1638,6 +1651,40 @@ def list_relation_edges(conn: sqlite3.Connection, graph: str, query: dict) -> li
         }
         for row in rows
     ]
+
+
+def fetch_relation(conn: sqlite3.Connection, graph: str, edge_id: int) -> dict:
+    config = _graph(graph)
+    row = conn.execute(
+        f"SELECT rel.*, ty.name AS relation_name, ty.code AS relation_code, "
+        f"ty.forward_label, ty.reverse_label, ty.is_directed, "
+        f"s.title AS source_title, t.title AS target_title "
+        f"FROM {config['edges']} rel "
+        f"JOIN {config['types']} ty ON ty.id = rel.relation_type_id "
+        f"JOIN {NODE_TABLES[config['source_kind']]} s ON s.id = rel.source_id "
+        f"JOIN {NODE_TABLES[config['target_kind']]} t ON t.id = rel.target_id "
+        "WHERE rel.id = ?",
+        (edge_id,),
+    ).fetchone()
+    if row is None:
+        raise ApiError(404, "关系不存在", "not_found")
+    return {
+        "id": row["id"],
+        "source_id": row["source_id"],
+        "target_id": row["target_id"],
+        "source_kind": config["source_kind"],
+        "target_kind": config["target_kind"],
+        "source_title": row["source_title"],
+        "target_title": row["target_title"],
+        "relation_type_id": row["relation_type_id"],
+        "relation_name": row["relation_name"],
+        "relation_code": row["relation_code"],
+        "forward_label": row["forward_label"],
+        "reverse_label": row["reverse_label"],
+        "is_directed": bool(row["is_directed"]),
+        "properties": _json_value(row["properties"]),
+        "created_at": row["created_at"],
+    }
 
 
 def node_relations(
