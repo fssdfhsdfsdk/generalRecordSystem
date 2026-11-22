@@ -9,21 +9,31 @@ import {
   Tag,
   Tooltip,
 } from 'antd'
-import {
-  BranchesOutlined,
-  EditOutlined,
-  LinkOutlined,
-  ReloadOutlined,
-} from '@ant-design/icons'
+import { EditOutlined, LinkOutlined, ReloadOutlined } from '@ant-design/icons'
 import { qkApi } from '../api'
 import { DIFFICULTY_OPTIONS, difficultyColor } from '../qkMeta'
 import { formatDate } from '../../../utils'
 import Markdown from '../../../components/Markdown'
 import TagPill from '../../../components/TagPill'
 import EmptyState from '../../../components/EmptyState'
+import QkPagedTitleList from './QkPagedTitleList'
+import RelationDetailDrawer from './RelationDetailDrawer'
+import RelationCreateDrawer from './RelationCreateDrawer'
 
 const difficultyLabel = (value) =>
   DIFFICULTY_OPTIONS.find((item) => item.value === value)?.label || `难度 ${value}`
+
+function flattenRelations(groups = [], graph) {
+  return groups.flatMap((group) =>
+    group.items.map((item) => ({
+      id: item.edge_id,
+      title: item.related_title,
+      subtitle: `${group.name} · ${item.label}${item.direction === 'in' ? '（反向）' : ''}`,
+      graph,
+      edge: { ...item, group },
+    })),
+  )
+}
 
 export default function KnowledgeViewDrawer({
   open,
@@ -31,23 +41,38 @@ export default function KnowledgeViewDrawer({
   onClose,
   onEdit,
   onChanged,
-  onOpenRelations,
-  onOpenQuestionRelations,
+  onOpenRelatedItem,
+  onManageRelations,
+  onManageQuestionRelations,
 }) {
   const { message } = AntApp.useApp()
   const [detail, setDetail] = useState(null)
+  const [knowledgeRelations, setKnowledgeRelations] = useState([])
+  const [questionRelations, setQuestionRelations] = useState([])
   const [loading, setLoading] = useState(false)
   const [reloadToken, setReloadToken] = useState(0)
+  const [relation, setRelation] = useState(null)
+  const [relationCreate, setRelationCreate] = useState(null)
 
   useEffect(() => {
     if (!open || !knowledgeId) return undefined
     let alive = true
     setLoading(true)
     setDetail(null)
-    qkApi
-      .getKnowledge(knowledgeId)
-      .then((data) => {
-        if (alive) setDetail(data)
+    setKnowledgeRelations([])
+    setQuestionRelations([])
+    Promise.all([
+      qkApi.getKnowledge(knowledgeId),
+      qkApi.knowledgeRelations(knowledgeId),
+      qkApi.knowledgeQuestionRelations(knowledgeId),
+    ])
+      .then(([knowledge, knowledgeRel, questionRel]) => {
+        if (!alive) return
+        setDetail(knowledge)
+        setKnowledgeRelations(flattenRelations(knowledgeRel.groups || [], 'knowledge'))
+        setQuestionRelations(
+          flattenRelations(questionRel.groups || [], 'question_knowledge'),
+        )
       })
       .catch((error) => {
         if (alive) message.error(error.message)
@@ -60,11 +85,16 @@ export default function KnowledgeViewDrawer({
     }
   }, [open, knowledgeId, reloadToken, message])
 
+  const reload = () => {
+    setReloadToken((token) => token + 1)
+    onChanged?.()
+  }
+
   return (
     <Drawer
       open={open}
       onClose={onClose}
-      width={780}
+      width={820}
       className="catalog-detail-drawer"
       title={
         <div className="drawer-heading">
@@ -92,31 +122,6 @@ export default function KnowledgeViewDrawer({
         <Skeleton active paragraph={{ rows: 8 }} />
       ) : detail ? (
         <div className="catalog-detail qk-detail">
-          <div className="qk-relation-entries">
-            <button
-              type="button"
-              className="qk-relation-entry"
-              onClick={() => onOpenRelations?.(detail)}
-            >
-              <BranchesOutlined />
-              <span>
-                <strong>知识关系</strong>
-                <small>{detail.relation_count} 条关联</small>
-              </span>
-            </button>
-            <button
-              type="button"
-              className="qk-relation-entry"
-              onClick={() => onOpenQuestionRelations?.(detail)}
-            >
-              <LinkOutlined />
-              <span>
-                <strong>关联习题</strong>
-                <small>{detail.question_relation_count} 道习题</small>
-              </span>
-            </button>
-          </div>
-
           {detail.summary ? (
             <div className="qk-summary-preview">
               <span>核心摘要</span>
@@ -161,6 +166,39 @@ export default function KnowledgeViewDrawer({
             <h3>参考来源</h3>
             <Markdown value={detail.references} empty="还没有记录参考来源。" />
           </section>
+
+          <div className="qk-detail-sections">
+            <QkPagedTitleList
+              eyebrow="KNOWLEDGE RELATIONS"
+              title="知识关系"
+              rows={knowledgeRelations}
+              emptyText="还没有知识关系。"
+              onAdd={() =>
+                setRelationCreate({
+                  graph: 'knowledge',
+                  sourceId: knowledgeId,
+                  sourceKind: 'knowledge',
+                  sourceTitle: detail.title,
+                })
+              }
+              manageLabel="关系管理"
+              onManage={onManageRelations}
+              onItemClick={(row) =>
+                setRelation({ graph: row.graph, edgeId: row.id })
+              }
+            />
+            <QkPagedTitleList
+              eyebrow="RELATED QUESTIONS"
+              title="关联习题"
+              rows={questionRelations}
+              emptyText="还没有关联习题。"
+              manageLabel="关系管理"
+              onManage={onManageQuestionRelations}
+              onItemClick={(row) =>
+                setRelation({ graph: row.graph, edgeId: row.id })
+              }
+            />
+          </div>
         </div>
       ) : (
         <EmptyState
@@ -168,15 +206,30 @@ export default function KnowledgeViewDrawer({
           title="无法载入这条知识"
           description="它可能已被删除，或后端服务暂时不可用。"
           action={
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={() => setReloadToken((token) => token + 1)}
-            >
+            <Button icon={<ReloadOutlined />} onClick={reload}>
               重新载入
             </Button>
           }
         />
       )}
+
+      <RelationDetailDrawer
+        open={Boolean(relation)}
+        graph={relation?.graph}
+        edgeId={relation?.edgeId}
+        onClose={() => setRelation(null)}
+        onChanged={reload}
+        onOpenRelatedItem={onOpenRelatedItem}
+      />
+      <RelationCreateDrawer
+        open={Boolean(relationCreate)}
+        graph={relationCreate?.graph}
+        sourceId={relationCreate?.sourceId}
+        sourceKind={relationCreate?.sourceKind}
+        sourceTitle={relationCreate?.sourceTitle}
+        onClose={() => setRelationCreate(null)}
+        onCreated={reload}
+      />
     </Drawer>
   )
 }

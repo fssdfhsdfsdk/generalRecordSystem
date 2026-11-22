@@ -540,6 +540,11 @@ export default function QuestionListPage({ initialTags = [], initialFocus }) {
             setRelatedView(null)
             setRelatedEdit({ kind: 'knowledge', id: item.id })
           }}
+          onOpenRelatedItem={openRelatedItem}
+          onManageRelations={() => navigate('/qk/knowledge-relations')}
+          onManageQuestionRelations={() =>
+            navigate('/qk/question-knowledge-relations')
+          }
         />
       ) : null}
       {relatedEdit?.kind === 'question' ? (

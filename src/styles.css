@@ -8130,6 +8130,10 @@ button.tag-pill {
   margin-top: 18px;
 }
 
+.qk-create-relation-fields {
+  margin-top: 20px;
+}
+
 @media (max-width: 992px) {
   .qk-recent-grid,
   .qk-form-two-col,

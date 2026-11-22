@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Button, Pagination } from 'antd'
+import { Button, Pagination, Space } from 'antd'
 
 export default function QkPagedTitleList({
   eyebrow,
@@ -7,6 +7,8 @@ export default function QkPagedTitleList({
   rows = [],
   emptyText = '暂无内容',
   onItemClick,
+  onAdd,
+  addLabel = '添加关系',
   onManage,
   manageLabel = '管理',
 }) {
@@ -29,11 +31,18 @@ export default function QkPagedTitleList({
             {title}（{rows.length}）
           </h3>
         </div>
-        {onManage ? (
-          <Button size="small" type="link" onClick={onManage}>
-            {manageLabel}
-          </Button>
-        ) : null}
+        <Space size={4}>
+          {onAdd ? (
+            <Button size="small" type="primary" ghost onClick={onAdd}>
+              {addLabel}
+            </Button>
+          ) : null}
+          {onManage ? (
+            <Button size="small" type="link" onClick={onManage}>
+              {manageLabel}
+            </Button>
+          ) : null}
+        </Space>
       </div>
 
       {visible.length ? (

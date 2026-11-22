@@ -456,14 +456,16 @@ export default function KnowledgeListPage({ initialTags = [], initialFocus }) {
           setDetailId(null)
           openForm(detail)
         }}
-        onOpenRelations={(item) => {
-          setDetailId(null)
-          openRelation(item, 'knowledge')
-        }}
-        onOpenQuestionRelations={(item) => {
-          setDetailId(null)
-          openRelation(item, 'question_knowledge', 'knowledge')
-        }}
+        onOpenRelatedItem={(kind, id) =>
+          setRelatedView({
+            kind: kind === 'question' ? 'question' : 'knowledge',
+            id,
+          })
+        }
+        onManageRelations={() => navigate('/qk/knowledge-relations')}
+        onManageQuestionRelations={() =>
+          navigate('/qk/question-knowledge-relations')
+        }
       />
       <KnowledgeFormDrawer
         open={formOpen}
@@ -519,6 +521,16 @@ export default function KnowledgeListPage({ initialTags = [], initialFocus }) {
             setRelatedView(null)
             setRelatedEdit({ kind: 'knowledge', id: item.id })
           }}
+          onOpenRelatedItem={(kind, id) =>
+            setRelatedView({
+              kind: kind === 'question' ? 'question' : 'knowledge',
+              id,
+            })
+          }
+          onManageRelations={() => navigate('/qk/knowledge-relations')}
+          onManageQuestionRelations={() =>
+            navigate('/qk/question-knowledge-relations')
+          }
         />
       ) : null}
       {relatedEdit?.kind === 'question' ? (

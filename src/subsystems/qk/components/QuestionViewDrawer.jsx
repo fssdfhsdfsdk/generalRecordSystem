@@ -22,6 +22,7 @@ import QkPagedTitleList from './QkPagedTitleList'
 import AnswerDetailDrawer from './AnswerDetailDrawer'
 import RefAnswerDetailDrawer from './RefAnswerDetailDrawer'
 import RelationDetailDrawer from './RelationDetailDrawer'
+import RelationCreateDrawer from './RelationCreateDrawer'
 
 function flattenRelations(groups = [], graph) {
   return groups.flatMap((group) =>
@@ -56,6 +57,7 @@ export default function QuestionViewDrawer({
   const [answerId, setAnswerId] = useState(null)
   const [refAnswerId, setRefAnswerId] = useState(null)
   const [relation, setRelation] = useState(null)
+  const [relationCreate, setRelationCreate] = useState(null)
 
   useEffect(() => {
     if (!open || !questionId) return undefined
@@ -192,6 +194,14 @@ export default function QuestionViewDrawer({
               title="习题关系"
               rows={questionRelations}
               emptyText="还没有习题关系。"
+              onAdd={() =>
+                setRelationCreate({
+                  graph: 'question',
+                  sourceId: questionId,
+                  sourceKind: 'question',
+                  sourceTitle: detail.title,
+                })
+              }
               manageLabel="关系管理"
               onManage={onManageRelations}
               onItemClick={(row) =>
@@ -203,6 +213,14 @@ export default function QuestionViewDrawer({
               title="习题知识关系"
               rows={knowledgeRelations}
               emptyText="还没有习题知识关系。"
+              onAdd={() =>
+                setRelationCreate({
+                  graph: 'question_knowledge',
+                  sourceId: questionId,
+                  sourceKind: 'question',
+                  sourceTitle: detail.title,
+                })
+              }
               manageLabel="关系管理"
               onManage={onManageKnowledgeRelations}
               onItemClick={(row) =>
@@ -247,6 +265,15 @@ export default function QuestionViewDrawer({
         onClose={() => setRelation(null)}
         onChanged={reload}
         onOpenRelatedItem={onOpenRelatedItem}
+      />
+      <RelationCreateDrawer
+        open={Boolean(relationCreate)}
+        graph={relationCreate?.graph}
+        sourceId={relationCreate?.sourceId}
+        sourceKind={relationCreate?.sourceKind}
+        sourceTitle={relationCreate?.sourceTitle}
+        onClose={() => setRelationCreate(null)}
+        onCreated={reload}
       />
     </Drawer>
   )
