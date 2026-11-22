@@ -33,6 +33,7 @@ import {
 import { typeVisual } from '../subsystems/records/components/TypeIcon'
 import { PLAN_TYPES } from '../subsystems/plans/planMeta'
 import MainPage from './MainPage'
+import DbGroupSwitcher from './DbGroupSwitcher'
 import RecordsHomePage from '../subsystems/records/pages/HomePage'
 import RecordsPage from '../subsystems/records/pages/RecordsPage'
 import TagsPage from '../subsystems/records/pages/TagsPage'
@@ -767,7 +768,8 @@ export default function AppShell() {
             </div>
           </div>
           <div className="header-right">
-            <Tooltip title="records.db / plans.db / docs.db / repository.db / tools.db / question_and_knowledge.db，六个数据库完全隔离">
+            <DbGroupSwitcher compact />
+            <Tooltip title="每组都包含 records.db / plans.db / docs.db / repository.db / tools.db / question_and_knowledge.db，组内六库隔离">
               <span className="status-pill">
                 <span className="status-dot" />
                 六库隔离

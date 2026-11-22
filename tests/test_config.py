@@ -155,6 +155,77 @@ class ConfigTestCase(unittest.TestCase):
         with self.assertRaises(ConfigError):
             load_config(missing, env={})
 
+    def test_multiple_database_groups_are_parsed(self):
+        self.write_config(
+            {
+                "port": 9400,
+                "groups": [
+                    {
+                        "name": "default",
+                        "label": "默认组",
+                        "records_db": "db/a/records.db",
+                        "plans_db": "db/a/plans.db",
+                        "docs_db": "db/a/docs.db",
+                        "repository_db": "db/a/repository.db",
+                        "tools_db": "db/a/tools.db",
+                        "qk_db": "db/a/qk.db",
+                    },
+                    {
+                        "name": "study",
+                        "label": "学习组",
+                        "records_db": "db/b/records.db",
+                        "plans_db": "db/b/plans.db",
+                        "docs_db": "db/b/docs.db",
+                        "repository_db": "db/b/repository.db",
+                        "tools_db": "db/b/tools.db",
+                    },
+                ],
+                "default_group": "study",
+            }
+        )
+        cfg = load_config(self.config_path, env={})
+        self.assertEqual([group.name for group in cfg.groups], ["default", "study"])
+        self.assertEqual(cfg.groups[1].label, "学习组")
+        self.assertEqual(cfg.default_group, "study")
+        self.assertEqual(
+            cfg.groups[0].records_db, (self.temp_dir / "db/a/records.db").resolve()
+        )
+        # Missing qk_db falls back to a name-suffixed copy of the flat default.
+        self.assertEqual(
+            cfg.groups[1].qk_db,
+            (self.temp_dir / "data/question_and_knowledge_study.db").resolve(),
+        )
+
+    def test_invalid_group_configurations_are_rejected(self):
+        base_group = {
+            "name": "alpha",
+            "records_db": "g/alpha/records.db",
+            "plans_db": "g/alpha/plans.db",
+            "docs_db": "g/alpha/docs.db",
+            "repository_db": "g/alpha/repository.db",
+            "tools_db": "g/alpha/tools.db",
+            "qk_db": "g/alpha/qk.db",
+        }
+        cases = [
+            {"groups": []},
+            {"groups": [{**base_group, "name": "bad name"}]},
+            {"groups": [base_group], "default_group": "missing"},
+            {
+                "groups": [
+                    base_group,
+                    {
+                        **base_group,
+                        "name": "beta",
+                        "records_db": "g/alpha/records.db",
+                    },
+                ]
+            },
+        ]
+        for data in cases:
+            self.write_config(data)
+            with self.assertRaises(ConfigError, msg=str(data)):
+                load_config(self.config_path, env={})
+
     def test_invalid_environment_values_are_rejected(self):
         self.write_config({"port": 9100})
         for env in (

@@ -8155,3 +8155,84 @@ button.tag-pill {
     flex-wrap: wrap;
   }
 }
+
+/* -- Database groups -------------------------------------------------- */
+
+.db-group-switcher {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+  padding: 16px 20px;
+  border: 1px solid #dbe2ff;
+  border-radius: 16px;
+  background: linear-gradient(120deg, #f8faff, #eef2ff);
+}
+
+.db-group-kicker {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.db-group-copy h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.db-group-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.db-group-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.db-group-select-large {
+  min-width: 180px;
+}
+
+.db-group-default {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.db-group-compact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--primary);
+}
+
+.db-group-compact .db-group-select {
+  min-width: 104px;
+}
+
+@media (max-width: 680px) {
+  .db-group-switcher {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .db-group-control {
+    justify-content: flex-start;
+  }
+
+  .header-right .db-group-compact .db-group-select {
+    min-width: 80px;
+  }
+}

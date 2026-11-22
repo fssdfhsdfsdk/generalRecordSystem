@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping
@@ -38,15 +39,42 @@ ALLOWED_KEYS = {
     "repository_db",
     "tools_db",
     "qk_db",
+    "groups",
+    "default_group",
     "open_browser",
     "debug",
 }
 TRUTHY = {"1", "true", "yes", "on"}
 FALSY = {"0", "false", "no", "off"}
+DB_KEYS = (
+    "records_db",
+    "plans_db",
+    "docs_db",
+    "repository_db",
+    "tools_db",
+    "qk_db",
+)
 
 
 class ConfigError(ValueError):
     """Raised when config.json or a GRS_* environment variable is invalid."""
+
+
+@dataclass(frozen=True)
+class DbGroup:
+    """One isolated set of the six subsystem databases."""
+
+    name: str
+    label: str
+    records_db: Path
+    plans_db: Path
+    docs_db: Path
+    repository_db: Path
+    tools_db: Path
+    qk_db: Path
+
+    def paths(self) -> dict[str, Path]:
+        return {key: getattr(self, key) for key in DB_KEYS}
 
 
 @dataclass(frozen=True)
@@ -63,6 +91,8 @@ class AppConfig:
     debug: bool
     source: Path | None = None
     overrides: tuple[str, ...] = field(default_factory=tuple)
+    groups: tuple[DbGroup, ...] = ()
+    default_group: str = "default"
 
 
 def _as_bool(value, label: str) -> bool:
@@ -110,6 +140,77 @@ def _as_path(value, label: str, base: Path) -> Path:
     if not path.is_absolute():
         path = base / path
     return path.resolve()
+
+
+def _as_group_name(value, label: str = "group name") -> str:
+    name = _as_text(value, label)
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", name):
+        raise ConfigError(
+            f"{label} may only contain letters, digits, '_' and '-' (max 64 chars)"
+        )
+    return name
+
+
+def _suffixed_path(path: Path, name: str) -> Path:
+    suffix = path.suffix or ".db"
+    return path.with_name(f"{path.stem}_{name}{suffix}")
+
+
+def _build_groups(
+    raw_groups,
+    *,
+    base: Path,
+    flat: dict[str, Path],
+    default_group_raw,
+) -> tuple[tuple[DbGroup, ...], str]:
+    if raw_groups is None:
+        name = (
+            _as_group_name(default_group_raw, "default_group")
+            if default_group_raw is not None
+            else "default"
+        )
+        label = "默认组" if name == "default" else name
+        group = DbGroup(
+            name=name,
+            label=label,
+            **{key: flat[key] for key in DB_KEYS},
+        )
+        return (group,), name
+
+    if not isinstance(raw_groups, list) or not raw_groups:
+        raise ConfigError("groups must be a non-empty array")
+
+    groups: list[DbGroup] = []
+    names: set[str] = set()
+    for index, item in enumerate(raw_groups, start=1):
+        if not isinstance(item, dict):
+            raise ConfigError(f"groups[{index}] must be an object")
+        name = _as_group_name(item.get("name"), f"groups[{index}].name")
+        if name in names:
+            raise ConfigError(f"duplicate group name: {name}")
+        names.add(name)
+        label = _as_text(item.get("label", name), f"groups[{index}].label")
+        paths: dict[str, Path] = {}
+        for key in DB_KEYS:
+            raw_path = item.get(key)
+            if raw_path is None:
+                paths[key] = _suffixed_path(flat[key], name)
+            else:
+                paths[key] = _as_path(raw_path, f"groups[{name}].{key}", base)
+        groups.append(DbGroup(name=name, label=label, **paths))
+
+    if default_group_raw is None:
+        default_name = groups[0].name
+    else:
+        default_name = _as_group_name(default_group_raw, "default_group")
+        if default_name not in names:
+            raise ConfigError(f"default_group does not match any group: {default_name}")
+
+    all_paths = [path for group in groups for path in group.paths().values()]
+    if len(set(all_paths)) != len(all_paths):
+        raise ConfigError("database paths must be unique across all groups")
+
+    return tuple(groups), default_name
 
 
 def _read_json(path: Path) -> dict:
@@ -231,6 +332,20 @@ def load_config(
             "must be six different files"
         )
 
+    groups, default_group = _build_groups(
+        file_data.get("groups"),
+        base=base,
+        flat={
+            "records_db": records_db,
+            "plans_db": plans_db,
+            "docs_db": docs_db,
+            "repository_db": repository_db,
+            "tools_db": tools_db,
+            "qk_db": qk_db,
+        },
+        default_group_raw=file_data.get("default_group"),
+    )
+
     return AppConfig(
         host=host,
         port=port,
@@ -244,4 +359,6 @@ def load_config(
         debug=debug,
         source=source,
         overrides=tuple(overrides),
+        groups=groups,
+        default_group=default_group,
     )

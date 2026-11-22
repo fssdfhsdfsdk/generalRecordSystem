@@ -1,5 +1,27 @@
+export const DB_GROUP_KEY = 'grs_db_group'
+
+export function currentDbGroup() {
+  if (typeof window === 'undefined') return ''
+  try {
+    return window.sessionStorage.getItem(DB_GROUP_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+
+export function setDbGroup(name) {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(DB_GROUP_KEY, name)
+  } catch {
+    // Session storage may be disabled; the server default group still works.
+  }
+}
+
 export async function request(path, options = {}) {
   const init = { ...options, headers: { ...(options.headers || {}) } }
+  const group = currentDbGroup()
+  if (group && path !== '/api/groups') init.headers['X-DB-Group'] = group
   if (init.body !== undefined) {
     init.headers['Content-Type'] = 'application/json'
     init.body = JSON.stringify(init.body)
@@ -30,6 +52,7 @@ export async function request(path, options = {}) {
 }
 
 export const api = {
+  groups: () => request('/api/groups'),
   overview: () => request('/api/overview'),
   stats: () => request('/api/stats'),
 

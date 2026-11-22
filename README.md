@@ -61,6 +61,29 @@ python server.py --config D:\configs\grs.json --port 8790 \
   "repository_db": "data/repository.db",
   "tools_db": "data/tools.db",
   "qk_db": "data/question_and_knowledge.db",
+  "groups": [
+    {
+      "name": "default",
+      "label": "默认组",
+      "records_db": "data/records.db",
+      "plans_db": "data/plans.db",
+      "docs_db": "data/docs.db",
+      "repository_db": "data/repository.db",
+      "tools_db": "data/tools.db",
+      "qk_db": "data/question_and_knowledge.db"
+    },
+    {
+      "name": "study",
+      "label": "学习组",
+      "records_db": "data/study_records.db",
+      "plans_db": "data/study_plans.db",
+      "docs_db": "data/study_docs.db",
+      "repository_db": "data/study_repository.db",
+      "tools_db": "data/study_tools.db",
+      "qk_db": "data/study_question_and_knowledge.db"
+    }
+  ],
+  "default_group": "default",
   "open_browser": true,
   "debug": false
 }
@@ -76,6 +99,8 @@ python server.py --config D:\configs\grs.json --port 8790 \
 | `repository_db` | string | 仓库管理 SQLite 路径 |
 | `tools_db` | string | 工具管理 SQLite 路径 |
 | `qk_db` | string | 习题与知识管理 SQLite 路径；六个数据库必须指向不同文件 |
+| `groups` | array | 可选；多套数据库组定义。每组包含 `name`、`label` 与上述六个 `*_db` 字段 |
+| `default_group` | string | 可选；默认组名，必须是 `groups` 中定义的 `name` |
 | `open_browser` | boolean | 启动后是否自动打开浏览器 |
 | `debug` | boolean | 是否在后端控制台打印异常堆栈 |
 
@@ -86,6 +111,10 @@ python server.py --config D:\configs\grs.json --port 8790 \
 - 未知字段、非法 JSON、端口越界、任意两个数据库相同都会明确报错并退出，不会静默回退。
 - `start.bat` 默认读取根目录 `config.json`；`--no-open` 只关闭本次浏览器打开动作。
 - 手动启动可用 `--config other.json` 指定其他配置文件；`start.bat` 固定读取根目录配置。
+- 不配置 `groups` 时，顶层六个 `*_db` 自动构成名为 `default` 的单组；旧配置文件无需修改。
+- 配置 `groups` 时，组内某个 `*_db` 省略时会自动使用「顶层路径 + 组名后缀」生成独立文件；所有组的数据库路径必须全局唯一。
+- 每个浏览器标签页通过 `sessionStorage` 独立保存当前数据组：主页面或顶栏切换组后刷新当前页，后续所有 API 通过 `X-DB-Group` 请求头路由到对应数据库；复制多个标签页即可分别选择不同组。
+- `GET /api/groups` 返回可选组、默认组与当前组。
 
 优先级从高到低：
 
@@ -581,7 +610,8 @@ tools 1 ─── n tool_resources
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/health` | 健康检查（版本、六个数据库列表） |
+| GET | `/api/health` | 健康检查（版本、当前数据组、六个数据库列表） |
+| GET | `/api/groups` | 数据组列表、默认组与当前组 |
 | GET | `/api/overview` | 主页面统计：记录 + 计划 + 文档 + 仓库 + 工具 + 习题知识 |
 
 ### 通用记录

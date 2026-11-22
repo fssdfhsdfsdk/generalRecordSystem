@@ -81,6 +81,8 @@ class Handler(BaseHTTPRequestHandler):
     tools_db_path: Path = DEFAULT_TOOLS_DB
     qk_db_path: Path = DEFAULT_QK_DB
     debug: bool = False
+    group_configs: dict = {}
+    default_group: str = "default"
     protocol_version = "HTTP/1.1"
 
     # -- utilities ---------------------------------------------------------
@@ -180,11 +182,39 @@ class Handler(BaseHTTPRequestHandler):
     def _handle_api(self, method: str, path: str, query: dict) -> None:
         q = {k: v[0] for k, v in query.items()}
 
+        # Each browser tab sends its own X-DB-Group header, so all /api routes
+        # below transparently operate on that tab's database group.
+        group_name = self.headers.get("X-DB-Group") or self.default_group
+        group = self.group_configs.get(group_name)
+        if group is None:
+            raise ApiError(400, f"未知数据库组：{group_name}", "unknown_group")
+        self.db_path = Path(group["records_db"])
+        self.plan_db_path = Path(group["plans_db"])
+        self.docs_db_path = Path(group["docs_db"])
+        self.repository_db_path = Path(group["repository_db"])
+        self.tools_db_path = Path(group["tools_db"])
+        self.qk_db_path = Path(group["qk_db"])
+
+        if path == "/api/groups" and method == "GET":
+            self._send_json(
+                {
+                    "groups": [
+                        {"name": name, "label": item.get("label", name)}
+                        for name, item in self.group_configs.items()
+                    ],
+                    "default_group": self.default_group,
+                    "active_group": group_name,
+                }
+            )
+            return
+
         if path == "/api/health" and method == "GET":
             self._send_json(
                 {
                     "status": "ok",
                     "version": APP_VERSION,
+                    "group": group_name,
+                    "groups": len(self.group_configs),
                     "databases": [
                         "records.db",
                         "plans.db",
@@ -953,6 +983,8 @@ def make_handler(
     repository_db_path: Path = DEFAULT_REPOSITORY_DB,
     tools_db_path: Path = DEFAULT_TOOLS_DB,
     qk_db_path: Path = DEFAULT_QK_DB,
+    groups: dict | None = None,
+    default_group: str = "default",
 ):
     class BoundHandler(Handler):
         pass
@@ -964,6 +996,33 @@ def make_handler(
     BoundHandler.tools_db_path = Path(tools_db_path)
     BoundHandler.qk_db_path = Path(qk_db_path)
     BoundHandler.debug = debug
+    if groups:
+        BoundHandler.group_configs = {
+            name: {
+                "label": item.get("label", name),
+                "records_db": Path(item["records_db"]),
+                "plans_db": Path(item["plans_db"]),
+                "docs_db": Path(item["docs_db"]),
+                "repository_db": Path(item["repository_db"]),
+                "tools_db": Path(item["tools_db"]),
+                "qk_db": Path(item["qk_db"]),
+            }
+            for name, item in groups.items()
+        }
+        BoundHandler.default_group = default_group
+    else:
+        BoundHandler.group_configs = {
+            default_group: {
+                "label": "默认组",
+                "records_db": Path(db_path),
+                "plans_db": Path(plan_db_path),
+                "docs_db": Path(docs_db_path),
+                "repository_db": Path(repository_db_path),
+                "tools_db": Path(tools_db_path),
+                "qk_db": Path(qk_db_path),
+            }
+        }
+        BoundHandler.default_group = default_group
     return BoundHandler
 
 
@@ -994,6 +1053,8 @@ def create_server(
     repository_db_path: Path | None = None,
     tools_db_path: Path | None = None,
     qk_db_path: Path | None = None,
+    groups: dict | None = None,
+    default_group: str = "default",
 ) -> AppHTTPServer:
     db_path = Path(db_path)
     if plan_db_path is None:
@@ -1030,6 +1091,17 @@ def create_server(
     repositories_store.init_db(repository_db_path)
     tools_store.init_db(tools_db_path)
     qk_store.init_db(qk_db_path)
+    if groups:
+        for name, group in groups.items():
+            for key, init in (
+                ("records_db", records_store.init_db),
+                ("plans_db", plans_store.init_db),
+                ("docs_db", docs_store.init_db),
+                ("repository_db", repositories_store.init_db),
+                ("tools_db", tools_store.init_db),
+                ("qk_db", qk_store.init_db),
+            ):
+                init(Path(group[key]))
     server = AppHTTPServer(
         (host, port),
         make_handler(
@@ -1040,6 +1112,8 @@ def create_server(
             repository_db_path,
             tools_db_path,
             qk_db_path,
+            groups,
+            default_group,
         ),
     )
     return server
@@ -1207,6 +1281,11 @@ def main() -> int:
             repository_db_path,
             tools_db_path,
             qk_db_path,
+            groups={
+                group.name: {"label": group.label, **group.paths()}
+                for group in cfg.groups
+            },
+            default_group=cfg.default_group,
         )
     except ValueError as exc:
         print(f"[ERROR] Invalid database configuration: {exc}")
@@ -1233,6 +1312,13 @@ def main() -> int:
     print(f"  Repos    : {repository_db_path}")
     print(f"  Tools    : {tools_db_path}")
     print(f"  Q/K      : {qk_db_path}")
+    print(
+        "  Groups   : "
+        + ", ".join(
+            f"{group.name}({group.label})" for group in cfg.groups
+        )
+        + f" [default: {cfg.default_group}]"
+    )
     print(f"  Browser  : {'open' if open_browser else 'manual'}")
     print("  Stop     : Ctrl+C")
     print("=" * 58)

@@ -7,6 +7,29 @@
   "repository_db": "data/repository.db",
   "tools_db": "data/tools.db",
   "qk_db": "data/question_and_knowledge.db",
+  "groups": [
+    {
+      "name": "default",
+      "label": "默认组",
+      "records_db": "data/records.db",
+      "plans_db": "data/plans.db",
+      "docs_db": "data/docs.db",
+      "repository_db": "data/repository.db",
+      "tools_db": "data/tools.db",
+      "qk_db": "data/question_and_knowledge.db"
+    },
+    {
+      "name": "study",
+      "label": "学习组",
+      "records_db": "data/study_records.db",
+      "plans_db": "data/study_plans.db",
+      "docs_db": "data/study_docs.db",
+      "repository_db": "data/study_repository.db",
+      "tools_db": "data/study_tools.db",
+      "qk_db": "data/study_question_and_knowledge.db"
+    }
+  ],
+  "default_group": "default",
   "open_browser": true,
   "debug": false
 }

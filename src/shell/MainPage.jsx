@@ -20,6 +20,7 @@ import { formatShortDate } from '../utils'
 import { useAppData } from './AppDataContext'
 import TitleText from '../components/TitleText'
 import TagPill from '../components/TagPill'
+import DbGroupSwitcher from './DbGroupSwitcher'
 import RecordViewDrawer from '../subsystems/records/components/RecordViewDrawer'
 import TypeIcon from '../subsystems/records/components/TypeIcon'
 import PlanStatusTag from '../subsystems/plans/components/PlanStatusTag'
@@ -123,6 +124,8 @@ export default function MainPage() {
 
   return (
     <div className="page main-page">
+      <DbGroupSwitcher />
+
       <section className="main-hero">
         <div className="main-hero-glow main-hero-glow-a" />
         <div className="main-hero-glow main-hero-glow-b" />
